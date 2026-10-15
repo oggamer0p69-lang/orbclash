@@ -1,0 +1,2294 @@
+<!DOCTYPE html>
+<!--
+=====================================================================
+  ORBCLASH — Ball Battle Simulator
+  One file. HTML + CSS + vanilla JS + Canvas 2D. No backend, no paid APIs.
+
+  DEPLOY FREE (rename nothing — the file must be called index.html)
+  ------------------------------------------------------------------
+  GitHub Pages : new repo → upload index.html → Settings → Pages →
+                 Source: "Deploy from a branch" → main / (root) → Save.
+  Netlify      : app.netlify.com/drop → drag the folder holding index.html.
+  Cloudflare   : Workers & Pages → Create → Pages → "Upload assets" →
+                 drop the folder → Deploy.
+  Any static host works; there is nothing to build.
+
+  DAMAGE FORMULAS
+  ------------------------------------------------------------------
+  Every ball deals  D(n) = base x seq(n) x (special multiplier),  where n
+  is the number of hits it has already landed. The first hit always deals
+  1. There is no curve fitting and no cap on growth. Only the JavaScript
+  number limit applies (values are clamped at 1e300 to stay finite).
+  The formulas live in the TYPES table (search "SEQ"). Run
+  __orbclash.matrix() in the console for a round-robin win-rate table.
+
+  DAMAGE DISPLAY
+  ------------------------------------------------------------------
+  The HUD shows two values:
+    NEXT <n>   the damage of the upcoming hit (live preview)
+    last <n>   the damage the previous hit ACTUALLY dealt
+               (with "(capped)" if the platform had less HP than the
+               incoming raw hit)
+  The floating number above a platform always equals "last", and the
+  sum of every "last" equals the Total dealt in the Stats panel.
+
+  DAMAGE REGISTRATION
+  ------------------------------------------------------------------
+  Every platform contact is registered. The cooldown is per-platform,
+  not per-body, so a ball that bounces off platform A and immediately
+  hits platform B still deals damage to B. See onWall() for details.
+
+  ROSTER SAFETY
+  ------------------------------------------------------------------
+  The Balls tab has a "Restore all" button that re-adds every missing
+  ball type from the TYPES table back into the roster with its default
+  stats. Use it any time the roster gets trimmed too aggressively by
+  the Delete button. It preserves arena, recording, theme and all other
+  preferences.
+
+  BALL SPAWN
+  ------------------------------------------------------------------
+  placeStart() puts the ball at the horizontal center of the box, in the
+  vertical middle of the free space above the platform stack. No random
+  offset. Both boxes spawn their ball dead center every match.
+=====================================================================
+-->
+<html lang="en" dir="ltr" prefix="og: https://ogp.me/ns#">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+
+<!-- ============================================================
+     PRIMARY META
+     ============================================================ -->
+<title>Orbclash — Free Ball Battle Simulator | Factorial vs Fibonacci vs Collatz | No Download</title>
+<meta name="description" content="Free browser ball battle game with 15 math ball types — Factorial, Fibonacci, Prime Numbers, Collatz Conjecture, Ackermann and more. Real physics, no download, no sign-up. Record vertical videos for TikTok and YouTube Shorts. Run tournaments. Works on mobile.">
+<meta name="keywords" content="ball battle simulator, orbclash, free browser game, factorial game, fibonacci game, prime numbers game, collatz conjecture, ackermann function, physics simulator, math battle game, no download game, no sign up game, offline browser game, canvas game, vertical video game, tiktok game, youtube shorts game, platform destroyer game, math puzzle game, free idle game">
+<meta name="author" content="Orbclash">
+<meta name="publisher" content="Orbclash">
+<meta name="copyright" content="Orbclash 2026">
+<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1, notranslate">
+<meta name="googlebot" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
+<meta name="bingbot" content="index, follow, max-image-preview:large, max-snippet:-1">
+<meta name="slurp" content="index, follow">
+<meta name="duckduckbot" content="index, follow">
+<meta name="yandex" content="index, follow">
+<meta name="baiduspider" content="index, follow">
+<meta name="rating" content="general">
+<meta name="revisit-after" content="3 days">
+<meta name="distribution" content="global">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="language" content="en">
+<meta name="geo.region" content="US">
+<meta name="geo.placename" content="Worldwide">
+<meta name="target" content="all">
+<meta name="audience" content="all">
+<meta name="coverage" content="Worldwide">
+<meta name="classification" content="Game, Simulation, Physics, Math, Casual, Idle">
+<meta name="category" content="Games">
+<meta name="topic" content="Browser games">
+<meta name="summary" content="Free physics-based ball battle simulator. 15 math ball types. No download, no sign-up.">
+<meta name="subject" content="Free browser ball battle simulator with 15 mathematical ball types">
+<meta name="abstract" content="Orbclash is a free browser ball battle simulator with 15 mathematical ball types and real physics.">
+
+<!-- ============================================================
+     CANONICAL + HREFLANG
+     ============================================================ -->
+<link rel="canonical" href="https://orbclash.example.com/">
+<link rel="alternate" hreflang="en" href="https://orbclash.example.com/">
+<link rel="alternate" hreflang="en-US" href="https://orbclash.example.com/">
+<link rel="alternate" hreflang="en-GB" href="https://orbclash.example.com/">
+<link rel="alternate" hreflang="x-default" href="https://orbclash.example.com/">
+
+<!-- ============================================================
+     THEME + PWA
+     ============================================================ -->
+<meta name="theme-color" content="#12101c" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#e7ecfb" media="(prefers-color-scheme: light)">
+<meta name="color-scheme" content="dark light">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Orbclash">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="application-name" content="Orbclash">
+<meta name="format-detection" content="telephone=no,email=no,address=no">
+<meta name="msapplication-TileColor" content="#12101c">
+
+<!-- ============================================================
+     SECURITY HEADERS (only meta-compatible directives)
+     ============================================================ -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: blob:; media-src blob:; font-src data:; connect-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'; upgrade-insecure-requests">
+<meta http-equiv="X-Content-Type-Options" content="nosniff">
+<meta http-equiv="X-XSS-Protection" content="1; mode=block">
+<meta http-equiv="Permissions-Policy" content="camera=(), microphone=(), geolocation=(), payment=(), usb=()">
+
+<!-- ============================================================
+     OPEN GRAPH (Facebook, Discord, Slack, LinkedIn, WhatsApp)
+     ============================================================ -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Orbclash">
+<meta property="og:title" content="Orbclash — Free Ball Battle Simulator">
+<meta property="og:description" content="15 balls — Factorial, Fibonacci, Primes, Collatz, Ackermann and more — race to smash stacked platforms. Real physics. Free. No download.">
+<meta property="og:url" content="https://orbclash.example.com/">
+<meta property="og:image" content="https://orbclash.example.com/og-image.png">
+<meta property="og:image:secure_url" content="https://orbclash.example.com/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Two balls racing to destroy platforms in the Orbclash simulator">
+<meta property="og:image:type" content="image/png">
+<meta property="og:locale" content="en_US">
+<meta property="og:locale:alternate" content="en_GB">
+<meta property="og:see_also" content="https://twitter.com/orbclash">
+<meta property="og:see_also" content="https://youtube.com/@orbclash">
+<meta property="og:see_also" content="https://tiktok.com/@orbclash">
+
+<!-- ============================================================
+     TWITTER / X CARD
+     ============================================================ -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@orbclash">
+<meta name="twitter:creator" content="@orbclash">
+<meta name="twitter:title" content="Orbclash — Free Ball Battle Simulator">
+<meta name="twitter:description" content="15 math balls. Real physics. Free. No download. Record vertical videos.">
+<meta name="twitter:image" content="https://orbclash.example.com/og-image.png">
+<meta name="twitter:image:alt" content="Orbclash ball battle simulator">
+<meta name="twitter:label1" content="Genre">
+<meta name="twitter:data1" content="Simulation">
+<meta name="twitter:label2" content="Price">
+<meta name="twitter:data2" content="Free">
+
+<!-- ============================================================
+     PERFORMANCE HINTS
+     ============================================================ -->
+<link rel="preconnect" href="https://orbclash.example.com" crossorigin>
+<link rel="dns-prefetch" href="https://orbclash.example.com">
+
+<!-- ============================================================
+     ICONS
+     ============================================================ -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='28' fill='%23ff4d8d'/%3E%3Ccircle cx='24' cy='24' r='8' fill='%23fff' fill-opacity='.5'/%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='28' fill='%23ff4d8d'/%3E%3C/svg%3E">
+<link rel="mask-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='28' fill='%23ff4d8d'/%3E%3C/svg%3E" color="#ff4d8d">
+
+<!-- ============================================================
+     STRUCTURED DATA — full JSON-LD @graph
+     ============================================================ -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": "https://orbclash.example.com/#website",
+      "url": "https://orbclash.example.com/",
+      "name": "Orbclash",
+      "alternateName": "Orbclash Ball Battle Simulator",
+      "description": "Free browser ball battle simulator with 15 math ball types.",
+      "inLanguage": "en-US",
+      "publisher": { "@id": "https://orbclash.example.com/#organization" },
+      "potentialAction": {
+        "@type": "SearchAction",
+        "target": { "@type": "EntryPoint", "urlTemplate": "https://orbclash.example.com/?q={search_term_string}" },
+        "query-input": "required name=search_term_string"
+      }
+    },
+    {
+      "@type": "Organization",
+      "@id": "https://orbclash.example.com/#organization",
+      "name": "Orbclash",
+      "url": "https://orbclash.example.com/",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://orbclash.example.com/logo.png",
+        "width": 512,
+        "height": 512,
+        "caption": "Orbclash logo"
+      },
+      "image": "https://orbclash.example.com/og-image.png",
+      "description": "Indie studio behind Orbclash, a free browser ball battle simulator.",
+      "foundingDate": "2026",
+      "sameAs": [
+        "https://twitter.com/orbclash",
+        "https://youtube.com/@orbclash",
+        "https://tiktok.com/@orbclash"
+      ],
+      "contactPoint": {
+        "@type": "ContactPoint",
+        "contactType": "customer support",
+        "email": "hello@orbclash.example.com",
+        "availableLanguage": ["English"]
+      }
+    },
+    {
+      "@type": "WebPage",
+      "@id": "https://orbclash.example.com/#webpage",
+      "url": "https://orbclash.example.com/",
+      "name": "Orbclash — Free Ball Battle Simulator",
+      "isPartOf": { "@id": "https://orbclash.example.com/#website" },
+      "primaryImageOfPage": { "@type": "ImageObject", "url": "https://orbclash.example.com/og-image.png" },
+      "datePublished": "2026-01-01",
+      "dateModified": "2026-01-15",
+      "description": "Free browser ball battle game with 15 math ball types.",
+      "breadcrumb": { "@id": "https://orbclash.example.com/#breadcrumbs" },
+      "inLanguage": "en-US"
+    },
+    {
+      "@type": "VideoGame",
+      "@id": "https://orbclash.example.com/#game",
+      "name": "Orbclash",
+      "alternateName": ["Orbclash Ball Battle Simulator", "Ball Battle Simulator"],
+      "url": "https://orbclash.example.com/",
+      "description": "Free browser ball battle simulator. 15 ball types, each following a real mathematical sequence or special ability. Two balls race to destroy stacked platforms. Record vertical MP4 or WebM videos, run single-elimination tournaments, customise arena and platform HP.",
+      "image": "https://orbclash.example.com/og-image.png",
+      "genre": ["Simulation", "Casual", "Physics", "Math", "Idle", "Arcade"],
+      "gamePlatform": ["Web Browser", "Android", "iOS", "Windows", "macOS", "Linux"],
+      "playMode": "SinglePlayer",
+      "applicationCategory": "Game",
+      "applicationSubCategory": "Browser Game",
+      "operatingSystem": "Any",
+      "browserRequirements": "Requires JavaScript and Canvas 2D. Chrome, Edge, Firefox, Safari.",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD",
+        "availability": "https://schema.org/InStock"
+      },
+      "author": { "@id": "https://orbclash.example.com/#organization" },
+      "publisher": { "@id": "https://orbclash.example.com/#organization" },
+      "datePublished": "2026-01-01",
+      "dateModified": "2026-01-15",
+      "inLanguage": "en-US",
+      "isAccessibleForFree": true,
+      "keywords": "ball battle, math game, factorial, fibonacci, collatz, ackermann, prime numbers, physics simulator, free browser game, no download"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "@id": "https://orbclash.example.com/#software",
+      "name": "Orbclash",
+      "applicationCategory": "GameApplication",
+      "applicationSubCategory": "Browser Game",
+      "operatingSystem": "Web, Android, iOS",
+      "url": "https://orbclash.example.com/",
+      "downloadUrl": "https://orbclash.example.com/",
+      "softwareVersion": "3.1",
+      "fileSize": "200KB",
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+      "author": { "@id": "https://orbclash.example.com/#organization" }
+    },
+    {
+      "@type": "FAQPage",
+      "@id": "https://orbclash.example.com/#faq",
+      "mainEntity": [
+        { "@type": "Question", "name": "Is Orbclash free to play?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. Orbclash is completely free. No download, no sign-up, no ads, no tracking. It works offline once loaded." } },
+        { "@type": "Question", "name": "What is the best free ball battle simulator?", "acceptedAnswer": { "@type": "Answer", "text": "Orbclash is a free browser ball battle simulator with 15 ball types, each following a real mathematical sequence or special ability. It runs entirely in the browser, requires no download, and works on mobile." } },
+        { "@type": "Question", "name": "How many ball types does Orbclash have?", "acceptedAnswer": { "@type": "Answer", "text": "15 ball types: 10 mathematical balls (Factorial, Fibonacci, Powers of 2, Prime Numbers, Collatz Conjecture, Powers of 3, Triangular Numbers, Lucas Sequence, Catalan Numbers, Ackermann Function) and 5 special balls (Speed Ball, Titan Ball, Splitter Ball, Gambler Ball, Hammer Ball)." } },
+        { "@type": "Question", "name": "Can I record battle videos in Orbclash?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. Orbclash records fresh battles as vertical MP4 videos (WebM fallback) with sound, ready for TikTok, YouTube Shorts and Instagram Reels." } },
+        { "@type": "Question", "name": "Can I set custom HP for each platform in Orbclash?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. Open the Arena tab, set Platform HP mode to Custom, and type any HP value for each layer." } },
+        { "@type": "Question", "name": "Does Orbclash work on mobile?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. Orbclash is fully responsive on Android and iOS browsers with touch controls and dark/light themes." } },
+        { "@type": "Question", "name": "How does Orbclash damage work?", "acceptedAnswer": { "@type": "Answer", "text": "Each ball starts at 1 damage and grows with its formula: D(n) = base x seq(n). Hit 1 deals 1 damage, hit 2 deals seq(1), and so on. There is no cap, only JavaScript's number limit." } },
+        { "@type": "Question", "name": "Can I run tournaments in Orbclash?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. Tick the balls you want in the Balls tab, then start a single-elimination tournament. Results feed a local leaderboard saved in your browser." } },
+        { "@type": "Question", "name": "Is there a paid version of Orbclash?", "acceptedAnswer": { "@type": "Answer", "text": "No. Orbclash is free forever with all features unlocked." } },
+        { "@type": "Question", "name": "Can I play Orbclash offline?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. Once loaded, Orbclash works offline. Your settings, presets and leaderboard are saved in your browser." } },
+        { "@type": "Question", "name": "What is the Collatz Conjecture?", "acceptedAnswer": { "@type": "Answer", "text": "The Collatz Conjecture is an unsolved math problem: start with any positive integer, if it's even divide by 2, if it's odd multiply by 3 and add 1. The conjecture says every sequence eventually reaches 1. In Orbclash, the Collatz Ball runs this orbit and hits for the highest peak it reaches." } },
+        { "@type": "Question", "name": "What is the Ackermann Function?", "acceptedAnswer": { "@type": "Answer", "text": "The Ackermann function is a recursive mathematical function that grows faster than any primitive recursive function. In Orbclash, the Ackermann Ball climbs the ladder from linear to doubling to 2^k and beyond." } }
+      ]
+    },
+    {
+      "@type": "BreadcrumbList",
+      "@id": "https://orbclash.example.com/#breadcrumbs",
+      "itemListElement": [
+        { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://orbclash.example.com/" },
+        { "@type": "ListItem", "position": 2, "name": "Ball Battle Simulator", "item": "https://orbclash.example.com/#battle" },
+        { "@type": "ListItem", "position": 3, "name": "Ball Types", "item": "https://orbclash.example.com/#balls" },
+        { "@type": "ListItem", "position": 4, "name": "Arena", "item": "https://orbclash.example.com/#arena" },
+        { "@type": "ListItem", "position": 5, "name": "Tournament", "item": "https://orbclash.example.com/#tournament" }
+      ]
+    },
+    {
+      "@type": "ItemList",
+      "@id": "https://orbclash.example.com/#ball-types",
+      "name": "Orbclash Ball Types",
+      "description": "All 15 ball types in Orbclash, each with a distinct mathematical sequence or special ability.",
+      "numberOfItems": 15,
+      "itemListElement": [
+        { "@type": "ListItem", "position": 1, "name": "Factorial Ball" },
+        { "@type": "ListItem", "position": 2, "name": "Fibonacci Ball" },
+        { "@type": "ListItem", "position": 3, "name": "Powers of 2 Ball" },
+        { "@type": "ListItem", "position": 4, "name": "Prime Numbers Ball" },
+        { "@type": "ListItem", "position": 5, "name": "Collatz Conjecture Ball" },
+        { "@type": "ListItem", "position": 6, "name": "Powers of 3 Ball" },
+        { "@type": "ListItem", "position": 7, "name": "Triangular Numbers Ball" },
+        { "@type": "ListItem", "position": 8, "name": "Lucas Sequence Ball" },
+        { "@type": "ListItem", "position": 9, "name": "Catalan Numbers Ball" },
+        { "@type": "ListItem", "position": 10, "name": "Ackermann Function Ball" },
+        { "@type": "ListItem", "position": 11, "name": "Speed Ball" },
+        { "@type": "ListItem", "position": 12, "name": "Titan Ball" },
+        { "@type": "ListItem", "position": 13, "name": "Splitter Ball" },
+        { "@type": "ListItem", "position": 14, "name": "Gambler Ball" },
+        { "@type": "ListItem", "position": 15, "name": "Hammer Ball" }
+      ]
+    }
+  ]
+}
+</script>
+
+<style>
+:root{
+  --bg:#12101c; --surf:#1c1930; --surf2:#262243; --surf3:#322c58; --line:#37315a; --line2:#453d70;
+  --tx:#f4f1ff; --tx2:#c8c0e8; --mut:#a29bc4; --acc:#ffd23f; --accTx:#201a00; --danger:#ff5470;
+  --shadow:0 8px 32px rgba(0,0,0,.35);
+  color-scheme:dark;
+}
+:root[data-theme="light"]{
+  --bg:#e7ecfb; --surf:#ffffff; --surf2:#eef1ff; --surf3:#e0e6fa; --line:#c8d0ee; --line2:#a8b2d8;
+  --tx:#1b1736; --tx2:#3d3660; --mut:#625c86; --acc:#5b3df5; --accTx:#ffffff; --danger:#d92d52;
+  --shadow:0 8px 32px rgba(60,50,120,.12);
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;overflow-x:hidden}
+body{background:var(--bg);color:var(--tx);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-tap-highlight-color:transparent;padding-bottom:env(safe-area-inset-bottom)}
+:focus-visible{outline:2px solid var(--acc);outline-offset:2px;border-radius:6px}
+button,input,select,textarea{font:inherit;color:inherit}
+button{background:none;border:0;padding:0;cursor:pointer}
+
+header.top{
+  display:flex;align-items:center;gap:12px;
+  padding:10px 16px;height:56px;max-width:1240px;margin:0 auto;
+  position:sticky;top:0;z-index:10;
+  background:color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+}
+.logo{display:flex;align-items:baseline;gap:8px}
+.logo h1{margin:0;font:900 22px/1 "Arial Black",Impact,system-ui,sans-serif;font-style:italic;letter-spacing:-.6px;
+  background:linear-gradient(135deg,var(--acc) 0%,var(--danger) 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.logo .sub{color:var(--mut);font-size:12px;font-weight:600;letter-spacing:.3px;text-transform:uppercase}
+.grow{flex:1}
+.icon-btn{
+  width:40px;height:40px;border-radius:12px;
+  background:var(--surf2);border:1px solid var(--line);
+  display:inline-flex;align-items:center;justify-content:center;
+  font-size:17px;transition:all .15s;color:var(--tx)
+}
+.icon-btn:hover{background:var(--surf3);border-color:var(--line2);transform:translateY(-1px)}
+.icon-btn:active{transform:translateY(0)}
+
+main{
+  display:grid;grid-template-columns:auto minmax(0,1fr);gap:20px;
+  padding:0 16px 32px;max-width:1240px;margin:0 auto;align-items:start;
+}
+.left{display:flex;flex-direction:column;align-items:center;gap:12px;position:sticky;top:68px}
+#stage{
+  position:relative;
+  height:min(calc(100vh - 148px),calc((100vw - 32px)*16/9));
+  height:min(calc(100dvh - 148px),calc((100vw - 32px)*16/9));
+  aspect-ratio:9/16;border-radius:20px;overflow:hidden;background:#000;
+  box-shadow:0 20px 60px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.04) inset;
+}
+#cv{width:100%;height:100%;display:block;touch-action:manipulation}
+.overlay{position:absolute;left:0;right:0;bottom:5%;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;padding:0 16px;pointer-events:none}
+.overlay.center{top:0;bottom:0;align-items:center}
+.overlay[hidden]{display:none}
+.overlay > *{pointer-events:auto}
+.overlay.win{bottom:auto;left:8%;right:8%;padding:0;gap:8px;flex-wrap:nowrap}
+.overlay.win .btn{flex:1 1 0;min-width:0;white-space:nowrap}
+
+.controls{
+  display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:center;
+  padding:10px 12px;background:var(--surf);border:1px solid var(--line);
+  border-radius:16px;box-shadow:var(--shadow)
+}
+.controls select{
+  background:var(--surf2);border:1px solid var(--line);border-radius:10px;
+  padding:8px 10px;min-height:40px;font-weight:600;font-size:13px;color:var(--tx);
+  cursor:pointer;transition:border-color .15s
+}
+.controls select:hover{border-color:var(--line2)}
+
+.btn{
+  background:var(--surf2);border:1px solid var(--line);border-radius:10px;
+  padding:10px 16px;min-height:40px;font-weight:600;font-size:14px;
+  color:var(--tx);transition:all .15s;display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  text-decoration:none
+}
+.btn:hover{background:var(--surf3);border-color:var(--line2);transform:translateY(-1px)}
+.btn:active{transform:translateY(0)}
+.btn.pri{background:linear-gradient(135deg,var(--acc) 0%,#ffb02e 100%);color:var(--accTx);border-color:transparent;box-shadow:0 4px 14px rgba(255,210,63,.3)}
+.btn.pri:hover{box-shadow:0 6px 20px rgba(255,210,63,.4)}
+.btn.danger{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 40%,var(--line))}
+.btn.danger:hover{background:color-mix(in srgb,var(--danger) 12%,var(--surf2))}
+.btn.big{font-size:16px;padding:14px 26px;min-height:52px;border-radius:14px}
+.btn:disabled{opacity:.4;cursor:not-allowed;transform:none!important}
+
+.chip{
+  font-size:12px;padding:6px 12px;border-radius:20px;
+  background:var(--surf2);border:1px solid var(--line);font-weight:600;
+  cursor:pointer;transition:all .15s;color:var(--tx)
+}
+.chip:hover{border-color:var(--acc);color:var(--acc)}
+.chip.on{background:var(--acc);color:var(--accTx);border-color:transparent}
+
+.panel{
+  background:var(--surf);border:1px solid var(--line);border-radius:20px;
+  overflow:hidden;min-width:0;box-shadow:var(--shadow)
+}
+.tabs{
+  display:flex;overflow-x:auto;border-bottom:1px solid var(--line);
+  scrollbar-width:none;background:var(--surf2);padding:4px 4px 0
+}
+.tabs::-webkit-scrollbar{display:none}
+.tabs button{
+  flex:0 0 auto;background:none;border:0;
+  padding:12px 16px;color:var(--mut);cursor:pointer;font-weight:600;font-size:14px;
+  border-radius:10px 10px 0 0;transition:all .15s;position:relative;white-space:nowrap
+}
+.tabs button:hover{color:var(--tx);background:color-mix(in srgb,var(--tx) 5%,transparent)}
+.tabs button.on{color:var(--tx);background:var(--surf)}
+.tabs button.on::after{content:'';position:absolute;left:12px;right:12px;bottom:0;height:2px;background:var(--acc);border-radius:2px 2px 0 0}
+
+.pane{display:none;padding:20px;gap:16px;flex-direction:column}
+.pane.on{display:flex}
+
+.card{
+  background:var(--surf2);border:1px solid var(--line);border-radius:14px;
+  padding:14px;display:grid;gap:10px
+}
+.card h3{margin:0;font-size:14px;font-weight:700;color:var(--tx);display:flex;align-items:center;gap:8px}
+.card h3 .badge{
+  font-size:10px;padding:3px 8px;border-radius:20px;background:var(--acc);color:var(--accTx);
+  font-weight:800;text-transform:uppercase;letter-spacing:.5px
+}
+
+.field{display:grid;gap:6px;font-size:13px;color:var(--tx2);font-weight:500}
+.field > span{display:flex;align-items:center;gap:6px;color:var(--mut);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.4px}
+.field output{color:var(--acc);font-weight:700;margin-left:auto;font-variant-numeric:tabular-nums}
+.field input[type=range]{
+  width:100%;accent-color:var(--acc);height:24px;
+  -webkit-appearance:none;appearance:none;background:transparent
+}
+.field input[type=range]::-webkit-slider-runnable-track{height:6px;background:var(--surf3);border-radius:3px}
+.field input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:20px;height:20px;margin-top:-7px;background:var(--acc);border-radius:50%;cursor:pointer;box-shadow:0 2px 8px rgba(255,210,63,.4);transition:transform .15s}
+.field input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.15)}
+.field input[type=range]::-moz-range-track{height:6px;background:var(--surf3);border-radius:3px}
+.field input[type=range]::-moz-range-thumb{width:20px;height:20px;background:var(--acc);border:0;border-radius:50%;cursor:pointer}
+.field input[type=color]{padding:2px;height:42px;width:100%;border-radius:10px;cursor:pointer;background:var(--surf2);border:1px solid var(--line)}
+
+input[type=text],input[type=number],select,textarea{
+  background:var(--surf2);border:1px solid var(--line);border-radius:10px;
+  padding:10px 12px;min-height:42px;width:100%;color:var(--tx);
+  transition:border-color .15s;font-size:14px
+}
+input[type=text]:focus,input[type=number]:focus,select:focus,textarea:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 3px color-mix(in srgb,var(--acc) 20%,transparent)}
+textarea{width:100%;resize:vertical;font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;min-height:120px}
+
+.checkbox{display:flex;gap:10px;align-items:flex-start;font-size:14px;cursor:pointer;padding:8px 0;line-height:1.4}
+.checkbox input{width:20px;height:20px;accent-color:var(--acc);flex:0 0 auto;margin-top:1px;cursor:pointer}
+
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.row.nw{flex-wrap:nowrap}
+.row.nw>input,.row.nw>select{flex:1;min-width:0}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+
+.hint{color:var(--mut);font-size:13px;margin:0;line-height:1.5}
+.hint strong{color:var(--tx2)}
+.hint code{background:var(--surf3);padding:1px 6px;border-radius:4px;font-size:12px;font-family:ui-monospace,monospace}
+
+.roster{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px}
+.rrow{
+  display:flex;align-items:center;gap:8px;
+  border:1px solid var(--line);border-radius:12px;padding:8px 10px;
+  background:var(--surf2);transition:all .15s;cursor:pointer
+}
+.rrow:hover{border-color:var(--line2);background:var(--surf3)}
+.rrow.sel{border-color:var(--acc);background:color-mix(in srgb,var(--acc) 10%,var(--surf2));box-shadow:0 0 0 3px color-mix(in srgb,var(--acc) 15%,transparent)}
+.rrow input[type=checkbox]{width:18px;height:18px;accent-color:var(--acc);cursor:pointer;flex:0 0 auto}
+.rrow .dot{width:14px;height:14px;border-radius:50%;flex:0 0 auto;box-shadow:0 0 8px currentColor}
+.rrow .name{flex:1;font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rrow .type{font-size:10px;color:var(--mut);text-transform:uppercase;letter-spacing:.3px;font-weight:700}
+
+.editor{display:grid;grid-template-columns:1fr 1fr;gap:12px;border-top:1px solid var(--line);padding-top:16px;margin-top:8px}
+.editor .wide{grid-column:1/-1}
+
+.bracket{display:flex;gap:12px;overflow-x:auto;padding:4px 0 12px}
+.bcol{display:grid;gap:8px;align-content:space-around;min-width:150px}
+.bcol h4{margin:0 0 4px;font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.5px;font-weight:700}
+.bm{border:1px solid var(--line);border-radius:10px;font-size:12px;overflow:hidden;background:var(--surf2)}
+.bm.cur{border-color:var(--acc);box-shadow:0 0 0 3px color-mix(in srgb,var(--acc) 20%,transparent)}
+.bm div{padding:6px 10px;display:flex;gap:8px;align-items:center;white-space:nowrap}
+.bm div.w{font-weight:800;background:var(--surf3)}
+.bm div.l{opacity:.4}
+
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+th{color:var(--mut);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.4px}
+tr:last-child td{border-bottom:0}
+tbody tr:hover{background:color-mix(in srgb,var(--acc) 5%,transparent)}
+
+#chart{width:100%;height:220px;display:block;background:var(--surf2);border-radius:12px}
+
+#toast{
+  position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));
+  transform:translateX(-50%) translateY(20px);
+  background:var(--tx);color:var(--bg);padding:12px 20px;border-radius:14px;
+  font-weight:600;font-size:14px;opacity:0;pointer-events:none;transition:all .25s;
+  z-index:50;max-width:90vw;box-shadow:0 8px 32px rgba(0,0,0,.3)
+}
+#toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+
+#stopRec{
+  display:none;position:fixed;top:calc(12px + env(safe-area-inset-top));right:12px;z-index:60;
+  background:rgba(0,0,0,.7);color:#fff;border:1px solid rgba(255,255,255,.3);
+  border-radius:24px;padding:8px 18px;cursor:pointer;font-weight:600;font-size:14px;
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)
+}
+body.recording #stopRec,body.clean #stopRec{display:block}
+body.clean header.top,body.clean .controls,body.clean .panel,body.clean .seo-block{display:none}
+body.clean main{grid-template-columns:1fr;padding:0;max-width:none}
+body.clean #stage{height:100vh;height:100dvh;border-radius:0;box-shadow:none}
+
+#recVideo{width:100%;max-height:440px;background:#000;border-radius:14px}
+#recOut{display:grid;gap:10px}
+
+.seo-block{max-width:1240px;margin:0 auto;padding:32px 16px 48px;color:var(--tx2);font-size:14px;line-height:1.65}
+.seo-block h2{color:var(--tx);font-size:22px;margin:0 0 8px;font-weight:800;letter-spacing:-.3px}
+.seo-block h3{color:var(--tx);font-size:15px;margin:22px 0 6px;font-weight:700}
+.seo-block p{margin:8px 0}
+.seo-block ul{margin:8px 0 8px 20px;padding:0}
+.seo-block li{margin:4px 0}
+.seo-block details{margin:6px 0;border-bottom:1px solid var(--line);padding-bottom:8px}
+.seo-block summary{cursor:pointer;color:var(--tx);font-weight:600;padding:6px 0;font-size:14px}
+.seo-block summary::marker{color:var(--acc)}
+.seo-block a{color:var(--acc);text-decoration:none;font-weight:500}
+.seo-block a:hover{text-decoration:underline}
+.seo-block code{background:var(--surf2);padding:2px 6px;border-radius:6px;font-size:12px;font-family:ui-monospace,monospace}
+
+.foot{max-width:1240px;margin:0 auto;padding:20px 16px;color:var(--mut);font-size:12px;text-align:center}
+
+body{background:radial-gradient(1100px 560px at 85% -8%,color-mix(in srgb,var(--acc) 13%,transparent),transparent),radial-gradient(900px 500px at 0% 105%,color-mix(in srgb,var(--danger) 10%,transparent),transparent),var(--bg);background-attachment:fixed}
+#stage{box-shadow:0 20px 60px rgba(0,0,0,.5),0 0 90px color-mix(in srgb,var(--acc) 10%,transparent),0 0 0 1px rgba(255,255,255,.05) inset}
+.card{transition:border-color .15s}
+.card:hover{border-color:var(--line2)}
+.rrow .meta{flex:1;min-width:0;display:grid;line-height:1.25}
+.rrow .meta .name{flex:none}
+.rrow .fm{font-size:11px;color:var(--mut);font-family:ui-monospace,Menlo,Consolas,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rrow .type.sp{color:var(--acc)}
+.fx{display:inline-block;margin:4px 0;padding:6px 10px;border-radius:8px;background:var(--surf3);color:var(--tx);font:600 12px/1.45 ui-monospace,Menlo,Consolas,monospace}
+#formulaList{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
+.fml{border:1px solid var(--line);border-left:4px solid var(--c);border-radius:12px;padding:10px 12px;background:var(--surf);display:grid;gap:6px;align-content:start}
+.fml .fh{display:flex;align-items:center;gap:8px;font-size:14px}
+.fml .fh em{margin-left:auto;font-style:normal;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;padding:2px 8px;border-radius:20px;background:var(--acc);color:var(--accTx)}
+.fml code{font:600 12px/1.45 ui-monospace,Menlo,Consolas,monospace;color:var(--tx2);background:var(--surf3);padding:6px 8px;border-radius:8px;word-break:break-word}
+.fml .ft{font-size:11px;color:var(--mut);font-variant-numeric:tabular-nums;word-break:break-word}
+@media (max-width:900px){
+  main{grid-template-columns:1fr;gap:16px}
+  .left{position:static}
+  #stage{height:auto;max-height:70vh;aspect-ratio:9/16;width:100%;max-width:min(100%,420px);margin:0 auto}
+}
+@media (max-width:520px){
+  .grid2{grid-template-columns:1fr}
+  .editor{grid-template-columns:1fr}
+  .roster{grid-template-columns:1fr}
+  .controls{padding:8px}
+  .controls .btn{padding:8px 12px;font-size:13px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<a href="#battle" class="skip-link" style="position:absolute;left:-9999px">Skip to battle controls</a>
+<header class="top" role="banner">
+  <div class="logo">
+    <h1>Orbclash</h1>
+    <span class="sub">Ball Battle Simulator</span>
+  </div>
+  <span class="grow"></span>
+  <button class="icon-btn" id="bTheme" title="Switch theme" aria-label="Switch light or dark mode">◐</button>
+</header>
+
+<main role="main">
+  <div class="left">
+    <div id="stage">
+      <canvas id="cv" role="img" aria-label="Two stacked ball battle arenas showing the current battle" tabindex="0"></canvas>
+      <div id="ov" class="overlay"></div>
+    </div>
+    <div class="controls" role="toolbar" aria-label="Playback controls">
+      <button class="icon-btn" id="bPlay" title="Pause / resume (Space)" aria-label="Pause or resume">⏸</button>
+      <button class="icon-btn" id="bRestart" title="Restart (R)" aria-label="Restart battle">↻</button>
+      <select id="qSpeed" title="Time scale" aria-label="Time scale">
+        <option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option>
+        <option value="2">2×</option><option value="4">4×</option><option value="10">10×</option>
+      </select>
+      <button class="chip" id="bFmt" title="Cycle number style"></button>
+      <button class="icon-btn" id="bSound" title="Sound" aria-label="Sound on or off">🔊</button>
+      <button class="icon-btn" id="bRecQ" title="Record" aria-label="Record a fresh battle">⏺</button>
+    </div>
+  </div>
+
+  <aside class="panel" role="complementary" aria-label="Battle configuration">
+    <nav class="tabs" role="tablist">
+      <button class="on" data-tab="battle" role="tab" aria-selected="true">⚔️ Battle</button>
+      <button data-tab="balls" role="tab" aria-selected="false">🔬 Balls</button>
+      <button data-tab="arena" role="tab" aria-selected="false">🏟️ Arena</button>
+      <button data-tab="chaos" role="tab" aria-selected="false">🌪️ Chaos</button>
+      <button data-tab="tour" role="tab" aria-selected="false">🏆 Tournament</button>
+      <button data-tab="stats" role="tab" aria-selected="false">📈 Stats</button>
+      <button data-tab="rec" role="tab" aria-selected="false">🎬 Record</button>
+      <button data-tab="presets" role="tab" aria-selected="false">💾 Presets</button>
+    </nav>
+
+    <section class="pane on" id="p-battle" role="tabpanel">
+      <div class="card">
+        <h3>⚔️ Match setup</h3>
+        <p class="hint">Two balls, two boxes. Each ball breaks the platforms stacked at the bottom of its box. 10 mathematical balls plus 5 special balls. Every ball starts at <strong>1 damage</strong> and grows by its own formula with <strong>no cap</strong>. See the Balls tab for every formula.</p>
+        <div class="grid2">
+          <label class="field"><span>Top ball</span><select id="selA" aria-label="Top ball type"></select></label>
+          <label class="field"><span>Bottom ball</span><select id="selB" aria-label="Bottom ball type"></select></label>
+        </div>
+        <div class="row">
+          <button class="btn" id="bSwap">🔄 Swap</button>
+          <button class="btn" id="bRand">🎲 Random</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>🎮 Controls</h3>
+        <label class="field">
+          <span>Time scale <output id="oTs"></output></span>
+          <input type="range" min="-1" max="1" step="0.01" data-bind="tsExp">
+        </label>
+        <label class="field">
+          <span>Number style</span>
+          <select data-bind="fmt">
+            <option value="short">Short: K, M, B, T, Qa</option>
+            <option value="commas">Full with commas</option>
+            <option value="sci">Scientific: 1.2e9</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Time limit (seconds)</span>
+          <input type="number" data-bind="timeLimit" min="20" max="900" step="10">
+        </label>
+        <label class="field">
+          <span>Volume <output id="oVol"></output></span>
+          <input type="range" min="0" max="1" step="0.05" data-bind="sound.vol">
+        </label>
+      </div>
+
+      <div class="card">
+        <h3>🌱 Seed</h3>
+        <p class="hint">Same seed + same settings = same battle.</p>
+        <div class="row nw">
+          <input type="text" data-bind="seed" inputmode="numeric" aria-label="Seed">
+          <button class="btn" id="bSeed">New</button>
+        </div>
+      </div>
+
+      <button class="btn pri big" id="bFight">▶ Start battle</button>
+    </section>
+
+    <section class="pane" id="p-balls" role="tabpanel">
+      <div class="card">
+        <h3>🔬 Roster <span class="badge" id="rosterCount">0</span></h3>
+        <p class="hint">Tick balls to include in tournaments. Tap a ball to edit it. If your roster gets trimmed too far, hit <strong>Restore all</strong> below to bring every type back with its defaults.</p>
+        <div class="roster" id="roster"></div>
+      </div>
+
+      <div class="card" id="formulaCard">
+        <h3>📐 Damage formulas <span class="badge">n = hits landed</span></h3>
+        <p class="hint">Every ball starts at <strong>1 damage</strong> and grows with its formula. There is no cap on growth (only JavaScript's own number limit, about 1e308).</p>
+        <div id="formulaList"></div>
+      </div>
+
+      <div class="card">
+        <h3>➕ Add ball</h3>
+        <div class="row nw">
+          <select id="addType" aria-label="Type for new ball"></select>
+          <button class="btn pri" id="bAdd">Add</button>
+          <button class="btn" id="bRestoreAll" title="Add every missing ball type back to the roster">↺ Restore all</button>
+        </div>
+        <p class="hint">Restore all re-adds any ball type that was deleted, with its default stats. Your other preferences (arena, recording, theme, seed) are untouched.</p>
+      </div>
+
+      <div class="card" id="editorCard">
+        <h3>✏️ Edit ball</h3>
+        <div class="editor" id="editor">
+          <label class="field"><span>Name</span><input type="text" id="ed-name" maxlength="16"></label>
+          <label class="field"><span>Icon</span><input type="text" id="ed-icon" maxlength="4"></label>
+          <label class="field"><span>Color</span><input type="color" id="ed-color"></label>
+          <label class="field"><span>Type</span><select id="ed-type"></select></label>
+          <p class="hint wide" id="typeDesc"></p>
+          <label class="field"><span>Base damage</span><input type="text" id="ed-dmg"></label>
+          <label class="field"><span>Damage mode</span><select id="ed-fixed"><option value="0">Ability scales it</option><option value="1">Fixed</option></select></label>
+          <label class="field"><span>Speed (px/s)</span><input type="number" id="ed-speed" step="10"></label>
+          <label class="field"><span>Size (radius)</span><input type="number" id="ed-size" step="1"></label>
+          <label class="field"><span>Gravity</span><input type="number" id="ed-gravity" step="50"></label>
+          <label class="field"><span>Bounciness</span><input type="number" id="ed-bounce" step="0.01"></label>
+          <label class="field"><span>Wall friction</span><input type="number" id="ed-friction" step="0.01"></label>
+          <div class="row wide">
+            <button class="btn" id="bReset">Reset defaults</button>
+            <button class="btn danger" id="bDelete">Delete ball</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="pane" id="p-arena" role="tabpanel">
+      <div class="card">
+        <h3>🏟️ Arena</h3>
+        <div class="grid2">
+          <label class="field">
+            <span>Shape</span>
+            <select data-bind="arena.shape"><option value="box">Box</option><option value="circle">Circle</option></select>
+          </label>
+          <label class="field">
+            <span>Layers <output id="oLayers"></output></span>
+            <input type="range" min="1" max="8" step="1" data-bind="arena.layers">
+          </label>
+        </div>
+        <label class="field">
+          <span>Arena size <output id="oSize"></output></span>
+          <input type="range" min="0.55" max="1" step="0.01" data-bind="arena.size">
+        </label>
+      </div>
+
+      <div class="card">
+        <h3>💚 Platform HP</h3>
+        <label class="field">
+          <span>Mode</span>
+          <select data-bind="arena.hpMode">
+            <option value="same">Same HP every layer</option>
+            <option value="scale">Scaled (× growth per layer)</option>
+            <option value="custom">Custom per layer</option>
+          </select>
+        </label>
+        <div id="hpBase">
+          <label class="field">
+            <span>First layer HP</span>
+            <input type="text" id="a-plat" inputmode="decimal" autocomplete="off" placeholder="5000, 1e6, 5M, 2B">
+          </label>
+        </div>
+        <div id="hpScale" hidden>
+          <label class="field">
+            <span>Growth per layer <output id="oMul"></output></span>
+            <input type="range" min="0.25" max="4" step="0.05" data-bind="arena.platMul">
+          </label>
+        </div>
+        <div id="hpCustom" hidden>
+          <div class="row">
+            <button class="chip" data-fill="equal">All equal</button>
+            <button class="chip" data-fill="up">Ramp ×2</button>
+            <button class="chip" data-fill="down">Ramp ÷2</button>
+            <button class="chip" data-fill="boss">Boss ×10</button>
+          </div>
+          <div class="grid2" id="hpList"></div>
+          <p class="hint">Layer 1 is the top platform. Type any HP per layer. The chips fill all boxes from the first-layer value.</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>⚖️ Handicaps</h3>
+        <div class="grid2">
+          <label class="field">
+            <span>Top ball HP <output id="oMulA"></output></span>
+            <input type="range" min="0.25" max="4" step="0.05" data-bind="arena.mulA">
+          </label>
+          <label class="field">
+            <span>Bottom ball HP <output id="oMulB"></output></span>
+            <input type="range" min="0.25" max="4" step="0.05" data-bind="arena.mulB">
+          </label>
+        </div>
+        <p class="tot" id="hpTotal"></p>
+      </div>
+    </section>
+
+    <section class="pane" id="p-chaos" role="tabpanel">
+      <div class="card">
+        <h3>🌪️ Chaos mode</h3>
+        <label class="checkbox"><input type="checkbox" data-bind="chaos.meteors"><span><strong>Meteors</strong> — marked spots explode after 1 second, knock the ball and chip platforms</span></label>
+        <label class="checkbox"><input type="checkbox" data-bind="chaos.boosts"><span><strong>Speed boosts</strong> — a ball gets 60% faster for 3 seconds</span></label>
+        <label class="checkbox"><input type="checkbox" data-bind="chaos.shrink"><span><strong>Shrinking arena</strong> — walls close in over time</span></label>
+        <label class="field">
+          <span>Frequency <output id="oRate"></output></span>
+          <input type="range" min="0.25" max="4" step="0.05" data-bind="chaos.rate">
+        </label>
+      </div>
+    </section>
+
+    <section class="pane" id="p-tour" role="tabpanel">
+      <div class="card">
+        <h3>🏆 Tournament</h3>
+        <p class="hint">Single elimination from every ball ticked in the Balls tab.</p>
+        <div class="row">
+          <button class="btn pri" id="bTourStart">Start tournament</button>
+          <button class="btn" id="bTourNext">Play next match</button>
+        </div>
+        <label class="checkbox"><input type="checkbox" data-bind="autoNext"><span>Auto-play next match after 3 seconds</span></label>
+      </div>
+      <div class="card">
+        <h3>📊 Bracket</h3>
+        <div class="bracket" id="bracket"></div>
+      </div>
+      <div class="card">
+        <h3>🏅 Leaderboard</h3>
+        <div id="lb"></div>
+        <button class="btn danger" id="bLbReset">Reset leaderboard</button>
+      </div>
+    </section>
+
+    <section class="pane" id="p-stats" role="tabpanel">
+      <div class="card">
+        <h3>📈 HP over time</h3>
+        <canvas id="chart" aria-label="HP over time"></canvas>
+      </div>
+      <div class="card">
+        <h3>📋 Per-ball stats</h3>
+        <div id="statTable"></div>
+      </div>
+    </section>
+
+    <section class="pane" id="p-rec" role="tabpanel">
+      <div class="card">
+        <h3>🎬 Recording</h3>
+        <p class="warn" id="recWarn" hidden>This browser cannot record video. Use a recent Chrome, Edge or Firefox.</p>
+        <label class="checkbox"><input type="checkbox" data-bind="rec.watermark"><span>Show watermark text</span></label>
+        <label class="field"><span>Watermark text</span><input type="text" data-bind="rec.wmText" maxlength="24"></label>
+        <label class="checkbox"><input type="checkbox" data-bind="rec.hideUI"><span>Hide interface while recording</span></label>
+        <div class="grid2">
+          <label class="field"><span>Resolution</span><select data-bind="rec.res"><option value="1080">1080×1920</option><option value="720">720×1280</option></select></label>
+          <label class="field"><span>Frame rate</span><select data-bind="rec.fps"><option value="60">60 fps</option><option value="30">30 fps</option></select></label>
+        </div>
+        <label class="checkbox"><input type="checkbox" data-bind="rec.preferMp4"><span>Prefer MP4 (falls back to WebM)</span></label>
+        <div class="row">
+          <button class="btn pri" id="bRecStart">⏺ Record a fresh battle</button>
+          <button class="btn danger" id="bRecStop">Stop and save</button>
+        </div>
+        <p class="hint">Records a fresh battle as a vertical video with sound. Stops 2.5 seconds after the winner is shown.</p>
+      </div>
+      <div class="card" id="recOut" hidden>
+        <h3>✅ Ready</h3>
+        <video id="recVideo" controls playsinline></video>
+        <p class="hint" id="recInfo"></p>
+        <div class="row">
+          <a class="btn pri" id="recDl" href="#" download>⬇ Download video</a>
+          <button class="btn danger" id="recClear">Discard</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="pane" id="p-presets" role="tabpanel">
+      <div class="card">
+        <h3>💾 Save preset</h3>
+        <div class="row nw">
+          <input type="text" id="pName" placeholder="Preset name" maxlength="30">
+          <button class="btn pri" id="pSave">Save</button>
+        </div>
+        <div class="row nw">
+          <select id="pList" aria-label="Saved presets"></select>
+          <button class="btn" id="pLoad">Load</button>
+          <button class="btn danger" id="pDel">Delete</button>
+        </div>
+      </div>
+      <div class="card">
+        <h3>📦 Import / export</h3>
+        <div class="row">
+          <button class="btn" id="pExport">Export JSON</button>
+          <button class="btn" id="pImport">Import JSON</button>
+          <button class="btn danger" id="pReset">Reset everything</button>
+        </div>
+        <textarea id="pJson" spellcheck="false" placeholder="Paste preset JSON here, then click Import JSON."></textarea>
+      </div>
+    </section>
+  </aside>
+</main>
+
+<section class="seo-block" aria-label="About Orbclash">
+  <h2>About Orbclash — Free Ball Battle Simulator</h2>
+  <p>Orbclash is a free browser-based ball battle simulator. Two balls, two boxes: each ball bounces inside its own box and destroys the platforms stacked at the bottom. Every ball starts at 1 damage and grows through its own ability. The first ball to break every platform in its box wins.</p>
+  <p>There are 15 ball types. 10 mathematical: <strong>Factorial</strong>, <strong>Fibonacci</strong>, <strong>Powers of 2</strong>, <strong>Prime Numbers</strong>, <strong>Collatz</strong>, <strong>Powers of 3</strong>, <strong>Triangular Numbers</strong>, <strong>Lucas Sequence</strong>, <strong>Catalan Numbers</strong> and <strong>Ackermann</strong>; plus 5 special balls: <strong>Speed Ball</strong>, <strong>Titan Ball</strong>, <strong>Splitter Ball</strong>, <strong>Gambler Ball</strong> and <strong>Hammer Ball</strong>. Every ball starts at 1 damage and its formula is shown in the game.</p>
+
+  <h3>Features</h3>
+  <ul>
+    <li>15 ball types: 10 mathematical formulas plus Speed, Titan, Splitter, Gambler and Hammer balls</li>
+    <li>Custom HP per platform layer</li>
+    <li>Box and circle arenas, 1 to 8 layers</li>
+    <li>Chaos mode: meteors, speed boosts, shrinking arena</li>
+    <li>Single-elimination tournaments with local leaderboard</li>
+    <li>Record vertical battle videos (MP4 preferred, WebM fallback) with sound</li>
+    <li>Seed system for reproducible battles</li>
+    <li>Presets, export/import JSON, dark and light themes</li>
+    <li>Works offline, no sign-up, no ads, no tracking</li>
+  </ul>
+
+  <h3>How the damage works</h3>
+  <p>Each ball has an explicit formula. Hit number n (counting from 0) deals <code>base × seq(n)</code>, so the first hit is always 1 and the damage keeps growing with no cap. Special balls add an ability on top: more speed, a growing body, clones, crits or smashes. Open the browser console and run <code>__orbclash.matrix()</code> for a round-robin win-rate table.</p>
+
+  <h3>Frequently asked questions</h3>
+  <details open><summary>Is Orbclash free to play?</summary><p>Yes. Completely free, runs in your browser, no sign-up, works offline once loaded.</p></details>
+  <details><summary>How many ball types are there?</summary><p>15: ten mathematical balls (Factorial, Fibonacci, Powers of 2, Prime Numbers, Collatz, Powers of 3, Triangular Numbers, Lucas Sequence, Catalan Numbers, Ackermann) and five special balls (Speed, Titan, Splitter, Gambler, Hammer).</p></details>
+  <details><summary>Can I record battle videos?</summary><p>Yes. Records fresh battles as vertical MP4 videos (WebM fallback) with sound, ready for TikTok, YouTube Shorts and Instagram Reels.</p></details>
+  <details><summary>How do I add custom HP to each platform?</summary><p>Arena tab → Platform HP → Mode = Custom → type any HP for each layer.</p></details>
+  <details><summary>Does Orbclash work on mobile?</summary><p>Yes. Fully responsive on Android and iOS with touch controls and dark/light themes.</p></details>
+  <details><summary>What is the Collatz Conjecture?</summary><p>An unsolved math problem: start with any positive integer. If it's even, divide by 2; if odd, multiply by 3 and add 1. The conjecture says every sequence eventually reaches 1. In Orbclash, the Collatz Ball runs this orbit and hits for the highest peak it reaches.</p></details>
+  <details><summary>What is the Ackermann Function?</summary><p>A recursive mathematical function that grows faster than any primitive recursive function. In Orbclash, the Ackermann Ball climbs the ladder from linear to doubling to 2<sup>k</sup> and beyond.</p></details>
+  <details><summary>Can I play Orbclash offline?</summary><p>Yes. Once loaded, Orbclash works offline. Your settings, presets and leaderboard are saved in your browser.</p></details>
+</section>
+
+<button id="stopRec">■ Stop recording</button>
+<div id="toast" role="status" aria-live="polite"></div>
+<footer class="foot" role="contentinfo">Orbclash v3.1 · your settings, presets and leaderboard are saved in this browser only. No tracking, no ads, no sign-up.</footer>
+<noscript>This simulator needs JavaScript.</noscript>
+
+<script>
+(() => {
+'use strict';
+
+/* ==================================================================
+   1. CONSTANTS
+================================================================== */
+const W = 540, H = 960, AH = 480;
+const HUD_H = 84, PAD_X = 12, PAD_B = 22;
+const PW = W - PAD_X * 2;
+const PH = AH - HUD_H - 6 - PAD_B;
+const DT = 1 / 120;
+const TAU = Math.PI * 2;
+const REDUCE = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+const FONT  = '"Arial Black","Impact","Helvetica Neue",system-ui,sans-serif';
+const EMOJI = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+const MAX_HP = 1e300;
+const STACK_FRACTION = 0.30;
+const MIN_HIT_SPEED = 25;
+const HIT_COOLDOWN = 0.05;
+
+const $  = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const lerp = (a, b, t) => a + (b - a) * t;
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const getPath = (o, p) => p.split('.').reduce((x, k) => x && x[k], o);
+const setPath = (o, p, v) => {
+  const k = p.split('.'), l = k.pop();
+  let cur = o;
+  for (const n of k) { if (cur[n] === undefined || cur[n] === null) cur[n] = {}; cur = cur[n]; }
+  cur[l] = v;
+};
+let _uid = 0;
+const uid = () => 'f' + Date.now().toString(36) + (++_uid) + Math.floor(Math.random() * 46656).toString(36);
+
+function hashStr(s) { let h = 2166136261 >>> 0; s = String(s); for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+
+let rng = mulberry32(1);
+const crand = Math.random;
+const rr = (a, b) => a + (b - a) * rng();
+
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+};
+
+/* ---------- Numbers ---------- */
+const SUFFIX = ['', 'K', 'M', 'B', 'T', 'Qa', 'Qi', 'Sx', 'Sp', 'Oc', 'No', 'Dc'];
+let FMT = 'short';
+function sci(n) { return n.toExponential(2).replace('e+', 'e').replace(/\.?0+e/, 'e'); }
+function fmt(n, mode = FMT) {
+  if (!isFinite(n)) return n > 0 ? '∞' : '0';
+  if (n < 0) return '-' + fmt(-n, mode);
+  if (n < 1) return n === 0 ? '0' : n < .01 ? '<0.01' : n.toFixed(2);
+  if (mode === 'commas') return n < 1e21 ? Math.round(n).toLocaleString('en-US') : sci(n);
+  if (mode === 'sci') return n < 1e6 ? Math.round(n).toLocaleString('en-US') : sci(n);
+  if (n < 10) return String(+n.toFixed(1));
+  if (n < 999.5) return String(Math.round(n));
+  let i = Math.floor(Math.log10(n) / 3);
+  if (i >= SUFFIX.length) return sci(n);
+  let v = n / Math.pow(1000, i), t = v.toFixed(v >= 100 ? 1 : 2);
+  if (parseFloat(t) >= 1000) { i++; if (i >= SUFFIX.length) return sci(n); v = n / Math.pow(1000, i); t = v.toFixed(2); }
+  return (t.indexOf('.') >= 0 ? t.replace(/\.?0+$/, '') : t) + SUFFIX[i];
+}
+function fmtExact(n) {
+  if (!isFinite(n)) return String(n);
+  const s = fmt(n, 'short');
+  const back = parseBig(s);
+  return (Number.isFinite(back) && back === n) ? s : String(n);
+}
+function parseBig(s) {
+  if (typeof s === 'number') return s;
+  s = String(s).trim().replace(/,/g, '').replace(/\s+/g, '');
+  const m = s.match(/^(-?[\d.]+(?:e[+-]?\d+)?)([a-z]{1,2})?$/i);
+  if (!m) return NaN;
+  let v = parseFloat(m[1]);
+  if (!Number.isFinite(v)) return NaN;
+  if (m[2]) { const k = m[2].toLowerCase(), i = SUFFIX.findIndex(x => x && x.toLowerCase() === k); if (i < 0) return NaN; v *= Math.pow(1000, i); }
+  return v;
+}
+function hex2rgb(h) { h = h.replace('#', ''); if (h.length === 3) h = h.split('').map(c => c + c).join(''); const n = parseInt(h, 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; }
+function mix(a, b, t) { const A = hex2rgb(a), B = hex2rgb(b); return 'rgb(' + A.map((v, i) => Math.round(lerp(v, B[i], t))).join(',') + ')'; }
+
+/* ==================================================================
+   2. SOUND
+================================================================== */
+const Sound = (() => {
+  let ctx = null, master = null, dest = null, noiseBuf = null, on = true, vol = .6;
+  const last = {};
+  function init() {
+    if (!ctx) {
+      try {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        ctx = new AC();
+        master = ctx.createGain();
+        master.gain.value = vol;
+        master.connect(ctx.destination);
+        dest = ctx.createMediaStreamDestination();
+        master.connect(dest);
+        noiseBuf = ctx.createBuffer(1, ctx.sampleRate * .5, ctx.sampleRate);
+        const d = noiseBuf.getChannelData(0);
+        for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      } catch (e) { ctx = null; }
+    }
+    if (ctx && ctx.state === 'suspended') ctx.resume();
+  }
+  const ok = (k, gap) => { const t = performance.now(); if (last[k] && t - last[k] < gap) return false; last[k] = t; return true; };
+  function tone(f0, f1, dur, type, g, delay = 0) {
+    if (!on || !ctx) return;
+    const t = ctx.currentTime + delay, o = ctx.createOscillator(), gn = ctx.createGain();
+    o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur);
+    gn.gain.setValueAtTime(.0001, t); gn.gain.exponentialRampToValueAtTime(g, t + .008); gn.gain.exponentialRampToValueAtTime(.0001, t + dur);
+    o.connect(gn); gn.connect(master); o.start(t); o.stop(t + dur + .03);
+  }
+  function noise(dur, g, freq, delay = 0) {
+    if (!on || !ctx) return;
+    const t = ctx.currentTime + delay, s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), gn = ctx.createGain();
+    s.buffer = noiseBuf; f.type = 'lowpass'; f.frequency.value = freq;
+    gn.gain.setValueAtTime(g, t); gn.gain.exponentialRampToValueAtTime(.0001, t + dur);
+    s.connect(f); f.connect(gn); gn.connect(master); s.start(t); s.stop(t + dur + .02);
+  }
+  return {
+    init,
+    set(o, v) { on = o; vol = v; if (master) master.gain.value = v; },
+    stream() { return dest ? dest.stream : null; },
+    hit(m)  { if (!ok('hit', 35)) return; const f = 170 + m * 560; tone(f, f * .45, .14, 'square', .15); tone(f * 1.5, f * .7, .09, 'triangle', .09); noise(.06, .1, 2200); },
+    wall(i) { if (!ok('wall', 45)) return; tone(120 + Math.min(i, 900) * .12, 70, .05, 'sine', .07); },
+    tp()    { if (ok('tp', 80)) { tone(300, 1400, .16, 'sine', .1); } },
+    dot()   { if (ok('dot', 120)) { tone(200, 140, .08, 'sawtooth', .05); } },
+    boom()  { if (ok('boom', 100)) { noise(.35, .28, 700); tone(90, 30, .3, 'sine', .25); } },
+    start() { tone(440, 440, .12, 'square', .12); tone(880, 880, .22, 'square', .12, .14); },
+    tick()  { tone(660, 660, .08, 'square', .09); },
+    ko()    { noise(.5, .3, 1200); tone(260, 40, .5, 'sawtooth', .18); },
+    win()   { [523, 659, 784, 1047].forEach((f, i) => tone(f, f, .22, 'triangle', .16, .5 + i * .12)); }
+  };
+})();
+
+/* ==================================================================
+   3. BALL TYPES
+================================================================== */
+const CAP = 1e300;
+const memo = {};
+function memoSeq(key, gen) {
+  const arr = memo[key] || (memo[key] = []);
+  return n => {
+    n = Math.max(0, n | 0);
+    while (arr.length <= n) {
+      const v = gen(arr, arr.length);
+      arr.push(Number.isFinite(v) ? Math.min(CAP, v) : CAP);
+    }
+    return arr[n];
+  };
+}
+const isPrime = x => { if (x < 2) return false; for (let d = 2; d * d <= x; d++) if (x % d === 0) return false; return true; };
+const nextPrime = x => { let p = x + 1; while (!isPrime(p)) p++; return p; };
+const collatzPeak = s => { let x = s, peak = s, i = 0; while (x !== 1 && i++ < 100000) { x = x % 2 === 0 ? x / 2 : 3 * x + 1; if (x > peak) peak = x; } return peak; };
+const ackVal = (m, k) => m === 0 ? k + 1 : m === 1 ? k + 2 : m === 2 ? 2 * k + 3 : m === 3 ? Math.pow(2, k + 3) - 3 : m === 4 ? (k === 0 ? 13 : k === 1 ? 65533 : CAP) : CAP;
+const geo = (key, base) => memoSeq(key, (a, n) => Math.pow(base, n));
+
+const SEQ = {
+  fact:      memoSeq('fact',  (a, n) => n === 0 ? 1 : a[n - 1] * (n + 1)),
+  fib:       memoSeq('fib',   (a, n) => n < 2 ? 1 : a[n - 1] + a[n - 2]),
+  pow2:      memoSeq('pow2',  (a, n) => Math.pow(2, n)),
+  prime:     memoSeq('prime', (a, n) => n === 0 ? 1 : nextPrime(a[n - 1])),
+  collatz:   memoSeq('collatz', (a, n) => n === 0 ? 1 : Math.max(a[n - 1], collatzPeak(n + 1))),
+  pow3:      memoSeq('pow3',  (a, n) => Math.pow(3, n)),
+  triangular:memoSeq('tri',   (a, n) => (n + 1) * (n + 2) / 2),
+  lucas:     memoSeq('lucas', (a, n) => n === 0 ? 1 : n === 1 ? 3 : a[n - 1] + a[n - 2]),
+  catalan:   memoSeq('catalan', (a, n) => { if (n === 0) return 1; const v = a[n - 1] * 2 * (2 * n - 1) / (n + 1); return v < 9e15 ? Math.round(v) : v; }),
+  ackermann: memoSeq('ack',   (a, n) => n === 0 ? 1 : Math.max(a[n - 1], (() => { const j = n - 1, st = Math.floor(j / 6); return ackVal(st + 1, j % 6 + (st < 3 ? 3 * st : 0)); })())),
+  speed:     geo('speed', 1.5),
+  titan:     memoSeq('titan', (a, n) => Math.pow(n + 1, 3)),
+  splitter:  geo('splitter', 1.45),
+  gambler:   geo('gambler', 1.4),
+  hammer:    geo('hammer', 1.4)
+};
+
+const rawDmg = b => b.baseDmg * b.T.seq(b.hits) * (b.T.mult ? b.T.mult(b) : 1);
+const mkType = (group, label, name, icon, color, speed, short, formula, desc, seq, extra) => Object.assign(
+  { group, label, name, icon, color, base: 1, speed, size: 22, gravity: 0, bounce: 1, friction: 0, short, formula, desc, seq, dmg: rawDmg }, extra || {});
+
+const TYPES = {
+  factorial:  mkType('math', 'Factorial', 'Factorial', '❗', '#ff4d8d', 380, '(n+1)!', 'D(n) = (n+1)!  →  1, 2, 6, 24, 120…',
+    'Each hit multiplies the damage by the next integer. Slow start, then it explodes.', SEQ.fact),
+  fibonacci:  mkType('math', 'Fibonacci', 'Fibonacci', '🐚', '#9b7bff', 360, 'F(n+1)', 'D(n) = D(n−1) + D(n−2)  →  1, 1, 2, 3, 5, 8, 13…',
+    'Every hit adds the previous two damages together.', SEQ.fib),
+  powers2:    mkType('math', 'Powers of 2', 'Powers of 2', '🔷', '#38bdf8', 365, '2ⁿ', 'D(n) = 2ⁿ  →  1, 2, 4, 8, 16, 32…',
+    'Damage doubles on every hit.', SEQ.pow2),
+  prime:      mkType('math', 'Prime Numbers', 'Prime Numbers', '🔹', '#ffd23f', 355, 'pₙ', 'D(0) = 1, then D(n) = the n-th prime  →  1, 2, 3, 5, 7, 11, 13…',
+    'Damage follows the primes. Steady, polynomial-speed growth.', SEQ.prime),
+  collatz:    mkType('math', 'Collatz Conjecture', 'Collatz Conjecture', '🌀', '#c98a4b', 375, 'Collatz peak', 'x → x÷2 if even, 3x+1 if odd.  D(n) = highest value reached starting from n+1 (never drops)',
+    'Runs the Collatz orbit of a growing seed and hits for the highest peak it reaches. Jumpy and unpredictable.', SEQ.collatz),
+  powers3:    mkType('math', 'Powers of 3', 'Powers of 3', '🔺', '#ff8a3d', 350, '3ⁿ', 'D(n) = 3ⁿ  →  1, 3, 9, 27, 81, 243…',
+    'Damage triples on every hit.', SEQ.pow3),
+  triangular: mkType('math', 'Triangular Numbers', 'Triangular Numbers', '🔻', '#3ee6d0', 360, 'T(n+1)', 'D(n) = (n+1)(n+2) / 2  →  1, 3, 6, 10, 15, 21…',
+    'Each hit adds one more than the last increase was.', SEQ.triangular),
+  lucas:      mkType('math', 'Lucas Sequence', 'Lucas Sequence', '🌙', '#e56bff', 360, 'L(n+1)', 'D(n) = D(n−1) + D(n−2), starting 1, 3  →  1, 3, 4, 7, 11, 18, 29…',
+    'Fibonacci’s cousin with different starting values (2, 1, 3, 4, 7…).', SEQ.lucas),
+  catalan:    mkType('math', 'Catalan Numbers', 'Catalan Numbers', '🔶', '#16a34a', 340, 'Cₙ', 'D(n) = (2n)! / ((n+1)! · n!)  →  1, 1, 2, 5, 14, 42, 132…',
+    'Counts balanced parentheses, binary trees and more. Grows about 4× per hit.', SEQ.catalan),
+  ackermann:  mkType('math', 'Ackermann Function', 'Ackermann Function', '💠', '#ef4444', 330, 'A(m,k)', 'A(0,k)=k+1 · A(m,0)=A(m−1,1) · A(m,k)=A(m−1, A(m,k−1)).  m climbs every 6 hits',
+    'Climbs the Ackermann ladder: linear, then doubling, then 2ᵏ, then it blows past anything a number can hold.', SEQ.ackermann),
+
+  speed:      mkType('special', 'Speed Ball', 'Speed Ball', '⚡', '#ff3b30', 430, '1.5ⁿ + speed', 'D(n) = 1.5ⁿ.  Every hit makes the ball 6% faster (max 2.5×)',
+    'Gets faster with every hit, so it lands hits more often as the damage climbs.', SEQ.speed, {
+      onHit(b, p, lost, mul) { if (mul !== 1) return; b.spd = Math.min(2.5, b.spd * 1.06); const s = Math.hypot(b.vx, b.vy) || 1, k = b.speed0 * b.spd / s; b.vx *= k; b.vy *= k; },
+      hud: b => 'speed ' + b.spd.toFixed(2) + '×' }),
+  titan:      mkType('special', 'Titan Ball', 'Titan Ball', '🗿', '#b08968', 300, '(n+1)³ + size', 'D(n) = (n+1)³  →  1, 8, 27, 64, 125…  Grows 8% bigger every hit (max 2.2×)',
+    'Slow and heavy. A bigger body touches the platforms more often and hits like a hammer.', SEQ.titan, {
+      size: 20,
+      init(b) { b.gw = 1; },
+      onHit(b, p, lost, mul) { if (mul !== 1) return; b.gw = Math.min(2.2, (b.gw || 1) + 0.08); },
+      hud: b => 'size ' + (b.gw || 1).toFixed(2) + '×' }),
+  splitter:   mkType('special', 'Splitter Ball', 'Splitter Ball', '🧬', '#84cc16', 370, '1.45ⁿ + clones', 'D(n) = 1.45ⁿ.  Every 4th hit spawns a clone for 6 s that hits for ½ damage',
+    'Splits off clones that help break platforms. Up to 12 at once.', SEQ.splitter, {
+      onHit(b, p, lost, mul) { if (mul !== 1) return; if ((b.hits + 1) % 4 === 0) spawnMinion(b, { r: 12, life: 6, mul: .5, icon: '' }); },
+      hud: b => 'clones ' + (arenas[b.side] ? arenas[b.side].minions.length : 0) }),
+  gambler:    mkType('special', 'Gambler Ball', 'Gambler Ball', '🎲', '#6366f1', 370, '1.4ⁿ + crit', 'D(n) = 1.4ⁿ.  25% chance each hit to crit for ×4',
+    'Rolls the dice before every hit. The next roll is shown in the HUD so you can see the crit coming.', SEQ.gambler, {
+      init(b) { b.crit = rng() < .25; },
+      mult: b => b.crit ? 4 : 1,
+      onHit(b, p, lost, mul) { if (mul !== 1) return; b.crit = rng() < .25; },
+      hud: b => b.crit ? 'CRIT ready ×4' : 'no crit' }),
+  hammer:     mkType('special', 'Hammer Ball', 'Hammer Ball', '🔨', '#94a3b8', 360, '1.4ⁿ + smash', 'D(n) = 1.4ⁿ.  Every 5th hit is a SMASH worth ×6',
+    'Builds up to a huge smash every fifth hit.', SEQ.hammer, {
+      mult: b => (b.hits + 1) % 5 === 0 ? 6 : 1,
+      hud: b => 'smash in ' + (5 - b.hits % 5) })
+};
+
+function applyDefaults(f) { const T = TYPES[f.type]; f.dmg = T.base; f.speed = T.speed; f.size = T.size; f.gravity = T.gravity; f.bounce = T.bounce; f.friction = T.friction; f.fixed = false; }
+
+
+/* ==================================================================
+   4. SETTINGS
+================================================================== */
+function makeFighter(type) {
+  const T = TYPES[type];
+  return { id: uid(), type, name: T.name, icon: T.icon, color: T.color, enabled: true, dmg: T.base, fixed: false, speed: T.speed, size: T.size, gravity: T.gravity, bounce: T.bounce, friction: T.friction };
+}
+function defaults() {
+  const roster = Object.keys(TYPES).map(makeFighter);
+  return {
+    roster, a: roster[0].id, b: roster[1].id,
+    arena: { shape: 'box', size: 1, layers: 3, platHp: 5000, platMul: 1, hpMode: 'same', hps: [5000, 10000, 20000, 40000, 80000, 160000, 320000, 640000], mulA: 1, mulB: 1, pace: 22 },
+    chaos: { meteors: false, boosts: false, shrink: false, rate: 1 },
+    tsExp: 0, timeScale: 1, timeLimit: 180,
+    seed: String(Math.floor(Math.random() * 90000) + 10000),
+    fmt: 'short', autoNext: false,
+    rec: { watermark: true, wmText: 'orbclash', hideUI: true, res: '1080', fps: '60', preferMp4: true },
+    sound: { on: true, vol: .6 }
+  };
+}
+function normalize(inp) {
+  const d = defaults(), s = Object.assign({}, d, inp || {});
+  for (const k of ['arena', 'chaos', 'rec', 'sound']) s[k] = Object.assign({}, d[k], (inp && inp[k]) || {});
+  const n = (v, dv) => (v !== null && v !== undefined && v !== '' && Number.isFinite(+v)) ? +v : dv;
+  let ros = (Array.isArray(s.roster) ? s.roster : []).filter(f => f && TYPES[f.type]).map(f => {
+    const T = TYPES[f.type];
+    return { id: String(f.id || uid()), type: f.type, name: String(f.name || T.name).slice(0, 16), icon: String(f.icon || T.icon).slice(0, 4),
+      color: /^#[0-9a-f]{6}$/i.test(f.color) ? f.color : T.color, enabled: f.enabled !== false,
+      dmg: Math.max(0, n(f.dmg, T.base)), fixed: !!f.fixed, speed: clamp(n(f.speed, T.speed), 30, 1500), size: clamp(n(f.size, T.size), 8, 70),
+      gravity: clamp(n(f.gravity, T.gravity), 0, 4000), bounce: clamp(n(f.bounce, T.bounce), .2, 1.3), friction: clamp(n(f.friction, T.friction), 0, .6) };
+  });
+  if (ros.length < 2) ros = d.roster;
+  s.roster = ros;
+  if (!ros.some(f => f.id === s.a)) s.a = ros[0].id;
+  if (!ros.some(f => f.id === s.b)) s.b = ros[1].id;
+  s.tsExp = clamp(n(s.tsExp, 0), -1, 1); s.timeScale = Math.pow(10, s.tsExp);
+  s.timeLimit = clamp(n(s.timeLimit, 180), 20, 900);
+  s.seed = String(s.seed || '1');
+  s.fmt = ['short', 'commas', 'sci'].includes(s.fmt) ? s.fmt : 'short';
+  s.arena.shape = ['box', 'circle'].includes(s.arena.shape) ? s.arena.shape : 'box';
+  s.arena.size = clamp(n(s.arena.size, 1), .55, 1);
+  s.arena.layers = clamp(Math.round(n(s.arena.layers, 3)), 1, 8);
+  s.arena.platHp = clamp(n(s.arena.platHp, 5000), 1, MAX_HP);
+  s.arena.platMul = clamp(n(s.arena.platMul, 1), .25, 4);
+  s.arena.hpMode = ['same', 'scale', 'custom'].includes(s.arena.hpMode) ? s.arena.hpMode : 'same';
+  s.arena.hps = Array.from({ length: 8 }, (_, i) => clamp(n(Array.isArray(s.arena.hps) ? s.arena.hps[i] : null, s.arena.platHp), 1, MAX_HP));
+  s.arena.mulA = clamp(n(s.arena.mulA, 1), .25, 4); s.arena.mulB = clamp(n(s.arena.mulB, 1), .25, 4);
+  s.arena.pace = clamp(Math.round(n(s.arena.pace, 22)), 8, 60);
+  if ((+s.ver || 0) < 5) {
+    s.roster = d.roster;
+    s.a = s.roster[0].id;
+    s.b = s.roster[1].id;
+  }
+  s.ver = 5;
+  s.chaos.rate = clamp(n(s.chaos.rate, 1), .25, 4);
+  s.sound.vol = clamp(n(s.sound.vol, .6), 0, 1);
+  s.sound.on = s.sound.on !== false;
+  s.rec.watermark = !!s.rec.watermark; s.rec.hideUI = !!s.rec.hideUI;
+  s.rec.res = String(s.rec.res) === '720' ? '720' : '1080';
+  s.rec.fps = String(s.rec.fps) === '30' ? '30' : '60';
+  s.rec.wmText = String(s.rec.wmText || 'orbclash').slice(0, 24);
+  s.rec.preferMp4 = s.rec.preferMp4 !== false;
+  s.autoNext = !!s.autoNext;
+  return s;
+}
+let settings = normalize(store.get('bbs2.settings', null));
+let saveTimer = 0;
+function save() { clearTimeout(saveTimer); saveTimer = setTimeout(() => store.set('bbs2.settings', settings), 250); }
+const getF = id => settings.roster.find(f => f.id === id) || settings.roster[0];
+
+/* ==================================================================
+   5. SIMULATION
+================================================================== */
+let arenas = [], match = null, paused = false, acc = 0;
+
+function makeArena(idx, cfg) {
+  const o = settings.arena;
+  const a = { idx, top: idx * AH, py: idx * AH + HUD_H + 6, g: null, shake: 0, parts: [], floats: [], minions: [], meteors: [],
+    k: 1, shrinkT: 0, evT: 2 + rr(0, 3), ball: null,
+    plats: [], total: 0, rem: 0, ghost: 1, left: 0, done: false, frame: 0 };
+  for (let i = 0; i < o.layers; i++) {
+    const base = o.hpMode === 'custom' ? o.hps[i] : o.hpMode === 'scale' ? o.platHp * Math.pow(o.platMul, i) : o.platHp;
+    const hp = Math.min(MAX_HP, Math.max(1, base * (idx === 0 ? o.mulA : o.mulB)));
+    a.plats.push({ i, hp, max: hp, dead: false, flash: 0, pz: { stacks: 0, t: 0, tick: 0, dps: 0, src: null } });
+  }
+  a.total = a.plats.reduce((t, p) => t + p.max, 0); a.rem = a.total; a.left = a.plats.length;
+  a.g = geom(a);
+  const b = makeBall(cfg, idx, a.total);
+  b.r = Math.min(b.r0, a.g.rMax);
+  placeStart(b, a);
+  const ang = pickAngle(); b.vx = Math.cos(ang) * b.speed0; b.vy = Math.sin(ang) * b.speed0;
+  a.ball = b;
+  return a;
+}
+function pickAngle() { let a; do { a = rr(0, TAU); } while (Math.abs(Math.cos(a)) < .3 || Math.abs(Math.sin(a)) < .3); return a; }
+
+function geom(a) {
+  const o = settings.arena, k = a.k * o.size, hw = PW / 2 * k, hh = PH / 2 * k;
+  const g = { shape: o.shape, cx: W / 2, cy: a.py + PH / 2, hw, hh, R: Math.min(hw, hh), rects: [], rMax: 60 };
+  const n = a.plats.length;
+  const top = g.cy - hh, bot = g.cy + hh;
+  const boxH = bot - top;
+  const stackH = boxH * STACK_FRACTION;
+  const stackTop = bot - stackH;
+  const band = stackH / n;
+  const thUse = band * .5;
+  let minWidth = Infinity;
+  for (const p of a.plats) {
+    const y = stackTop + band * (p.i + .5);
+    const dy = y - g.cy;
+    const half = g.shape === 'circle' ? Math.sqrt(Math.max(0, g.R * g.R - (Math.abs(dy) + thUse) ** 2)) : hw;
+    minWidth = Math.min(minWidth, half * 2);
+    if (p.dead) continue;
+    g.rects.push({ x0: g.cx - half, x1: g.cx + half, y0: y - thUse, y1: y + thUse, p });
+  }
+  const aboveStack = stackTop - top;
+  g.rMax = Math.max(6, Math.min((aboveStack - 6) / 2, (minWidth - 6) / 2, 60));
+  return g;
+}
+function makeBall(cfg, side, total) {
+  const T = TYPES[cfg.type];
+  const b = { cfg, T, side, name: cfg.name, icon: cfg.icon, color: cfg.color,
+    baseDmg: Number.isFinite(+cfg.dmg) ? +cfg.dmg : T.base, speed0: cfg.speed, r: cfg.size, r0: cfg.size, gravity: cfg.gravity, bounce: cfg.bounce, friction: cfg.friction,
+    x: 0, y: 0, vx: 0, vy: 0,
+    hitCd: new Map(),
+    alive: true, hits: 0, trail: [], boost: 0, flash: 0, angle: 0, foe: null,
+    st: { dealt: 0, biggest: 0, biggestEffective: 0, landed: 0, broken: 0, effective: 0, raw: 0 },
+    lastHit: null,
+    gw: 1, spd: 1 };
+  if (T.init) T.init(b);
+  return b;
+}
+function dmgOf(b) { const v = b.cfg.fixed ? b.baseDmg : b.T.dmg(b); return Number.isFinite(v) ? Math.max(0, v) : 0; }
+
+function overlapsRects(x, y, r, g) {
+  const rr2 = (r + 6) ** 2;
+  for (const q of g.rects) { const cx = clamp(x, q.x0, q.x1), cy = clamp(y, q.y0, q.y1); if ((x - cx) ** 2 + (y - cy) ** 2 < rr2) return true; }
+  return false;
+}
+function place(b, g, spread) {
+  let attempts = 0;
+  while (attempts++ < 60) {
+    let x, y;
+    if (g.shape === 'circle') { const an = rr(0, TAU), d = Math.sqrt(rng()) * Math.max(0, g.R - b.r - 4) * spread; x = g.cx + Math.cos(an) * d; y = g.cy + Math.sin(an) * d; }
+    else { x = g.cx + rr(-1, 1) * Math.max(0, g.hw - b.r - 4) * spread; y = g.cy + rr(-1, 1) * Math.max(0, g.hh - b.r - 4) * spread; }
+    if (!overlapsRects(x, y, b.r, g)) { b.x = x; b.y = y; return; }
+  }
+  for (let gy = -1; gy <= 1; gy += .25) for (let gx = -1; gx <= 1; gx += .25) {
+    const x = g.cx + gx * (g.hw - b.r - 4), y = g.cy + gy * (g.hh - b.r - 4);
+    if (!overlapsRects(x, y, b.r, g)) { b.x = x; b.y = y; return; }
+  }
+  b.x = g.cx; b.y = g.cy - g.hh + b.r + 8;
+}
+function placeStart(b, a) {
+  const g = a.g, first = g.rects[0];
+  const yMin = g.cy - g.hh + b.r + 6;
+  const yMax = Math.max(yMin, (first ? first.y0 : g.cy + g.hh * 0.4) - b.r - 8);
+  const y = (yMin + yMax) / 2;
+  b.y = y;
+  b.x = g.cx;
+  if (b.y - b.r < g.cy - g.hh + 2) b.y = g.cy - g.hh + b.r + 2;
+  if (b.y + b.r > (first ? first.y0 : g.cy)) b.y = (first ? first.y0 : g.cy) - b.r - 2;
+}
+function teleport(b) {
+  const a = arenas[b.side];
+  puff(a, b.x, b.y, b.color);
+  place(b, a.g, 1);
+  puff(a, b.x, b.y, b.color);
+  b.trail.length = 0;
+  const s = Math.hypot(b.vx, b.vy) || b.speed0, ang = pickAngle(); b.vx = Math.cos(ang) * s; b.vy = Math.sin(ang) * s;
+  Sound.tp();
+}
+function moveBody(b, g, dt, hitCb) {
+  const sp = Math.hypot(b.vx, b.vy), n = Math.max(1, Math.ceil(sp * dt / (b.r * .5))), h = dt / n;
+  for (let i = 0; i < n; i++) { b.vy += b.gravity * h; b.x += b.vx * h; b.y += b.vy * h; collide(b, g, hitCb); }
+}
+function bounceOff(b, nx, ny, hitCb, q) {
+  const vn = b.vx * nx + b.vy * ny;
+  if (vn >= 0) return;
+  const e = b.bounce;
+  b.vx -= (1 + e) * vn * nx; b.vy -= (1 + e) * vn * ny;
+  if (b.friction > 0) { const tx = -ny, ty = nx, vt = b.vx * tx + b.vy * ty; b.vx -= tx * vt * b.friction; b.vy -= ty * vt * b.friction; }
+  hitCb(nx, ny, -vn, q);
+}
+function collide(b, g, hitCb) {
+  const r = b.r;
+  if (g.shape === 'circle') {
+    const dx = b.x - g.cx, dy = b.y - g.cy, d = Math.hypot(dx, dy);
+    if (d > 0 && d + r > g.R) { b.x = g.cx + dx / d * (g.R - r); b.y = g.cy + dy / d * (g.R - r); bounceOff(b, -dx / d, -dy / d, hitCb); }
+  } else {
+    const l = g.cx - g.hw + r, rt = g.cx + g.hw - r, t = g.cy - g.hh + r, bt = g.cy + g.hh - r;
+    if (b.x < l) { b.x = l; bounceOff(b, 1, 0, hitCb); } else if (b.x > rt) { b.x = rt; bounceOff(b, -1, 0, hitCb); }
+    if (b.y < t) { b.y = t; bounceOff(b, 0, 1, hitCb); } else if (b.y > bt) { b.y = bt; bounceOff(b, 0, -1, hitCb); }
+  }
+  const hits = [];
+  for (const q of g.rects) {
+    if (q.p && q.p.dead) continue;
+    const cx = clamp(b.x, q.x0, q.x1), cy = clamp(b.y, q.y0, q.y1), dx = b.x - cx, dy = b.y - cy, d2 = dx * dx + dy * dy;
+    if (d2 >= r * r) continue;
+    let nx, ny;
+    if (d2 > 1e-6) { const d = Math.sqrt(d2); nx = dx / d; ny = dy / d; b.x = cx + nx * r; b.y = cy + ny * r; }
+    else {
+      const pl = b.x - q.x0, pr = q.x1 - b.x, pt = b.y - q.y0, pb = q.y1 - b.y, m = Math.min(pl, pr, pt, pb);
+      if (m === pl) { nx = -1; ny = 0; b.x = q.x0 - r; } else if (m === pr) { nx = 1; ny = 0; b.x = q.x1 + r; }
+      else if (m === pt) { nx = 0; ny = -1; b.y = q.y0 - r; } else { nx = 0; ny = 1; b.y = q.y1 + r; }
+    }
+    hits.push({ nx, ny, q });
+  }
+  for (const h of hits) bounceOff(b, h.nx, h.ny, hitCb, h.q);
+}
+
+/* ---------- Combat ---------- */
+function onWall(a, body, owner, mul, nx, ny, impact, q) {
+  if (match.over || match.state !== 'fight') return;
+  if (!q) {
+    if (impact >= MIN_HIT_SPEED) {
+      burst(a, body.x - nx * body.r, body.y - ny * body.r, owner.color, 3, 120, 2, .3);
+      Sound.wall(impact);
+    }
+    return;
+  }
+  if (!q.p || q.p.dead) return;
+  if (impact < MIN_HIT_SPEED) return;
+  const now = match.t;
+  const key = q.p.i;
+  const last = body.hitCd.get(key);
+  if (last !== undefined && now - last < HIT_COOLDOWN) return;
+  body.hitCd.set(key, now);
+  burst(a, body.x - nx * body.r, body.y - ny * body.r, owner.color, mul === 1 ? 7 : 4, 150, 2.6, .35);
+  Sound.wall(impact);
+  strike(owner, mul, q.p);
+}
+function strike(src, mul, p) {
+  const a = arenas[src.side];
+  if (match.over || p.dead || a.done) return;
+  const raw = Math.min(dmgOf(src) * mul, 1e300);
+  const lost = hurtPlat(a, p, raw, src, 'hit');
+  src.st.effective = lost;
+  src.st.raw = raw;
+  src.st.landed++;
+  src.st.dealt += lost;
+  if (raw > src.st.biggest) src.st.biggest = raw;
+  if (lost > src.st.biggestEffective) src.st.biggestEffective = lost;
+  src.lastHit = { raw, lost, kind: 'hit', t: performance.now() };
+  if (!match.over && src.T.onHit) src.T.onHit(src, p, lost, mul);
+  if (mul === 1) src.hits++;
+}
+function hurtPlat(a, p, dmg, src, kind) {
+  if (p.dead || match.over || !(dmg > 0)) return 0;
+  const lost = Math.min(p.hp, dmg);
+  p.hp -= lost; a.rem = Math.max(0, a.rem - lost); p.flash = 1;
+  const r = a.g.rects.find(q => q.p === p);
+  const mag = clamp(Math.log10(lost + 1) / Math.log10(p.max + 1), 0, 1);
+  const col = kind === 'dot' ? '#8dff5a' : src ? src.color : '#ffa23d';
+  if (r) {
+    const x = src && kind !== 'dot' ? clamp(src.x, r.x0, r.x1) : (r.x0 + r.x1) / 2, y = (r.y0 + r.y1) / 2;
+    floater(a, x + (crand() - .5) * 24, r.y0 - 10, fmt(lost), col, 14 + 4.2 * Math.log10(lost + 1));
+    if (kind === 'dot') Sound.dot();
+    else {
+      a.shake = Math.min(14, a.shake + 1 + mag * 8);
+      burst(a, x, y, col, 6 + Math.round(mag * 18), 110 + mag * 240, 3.4, .5);
+      if (mag > .3) ring(a, x, y, col, 30 + mag * 50);
+      Sound.hit(mag);
+    }
+  }
+  if (p.hp <= 0) {
+    p.hp = 0; p.dead = true; a.left--;
+    if (src) src.st.broken++;
+    if (r) {
+      const x = (r.x0 + r.x1) / 2, y = (r.y0 + r.y1) / 2;
+      burst(a, x, y, col, 50, 340, 4.5, .9); ring(a, x, y, col, 110); ring(a, x, y, '#ffffff', 70);
+      floater(a, x, y - 26, 'BROKEN!', '#ffffff', 24);
+    }
+    a.shake = Math.min(18, a.shake + 10); Sound.boom();
+    if (a.left <= 0) { a.done = true; a.rem = 0; }
+    a.g = geom(a);
+  }
+  return lost;
+}
+function endMatch(w, reason) {
+  const m = match; if (m.over) return;
+  sample();
+  m.over = true; m.winner = w; m.loser = w.foe; m.overT = 0; m.reason = reason;
+  const l = w.foe, la = arenas[l.side];
+  l.alive = false; la.minions.length = 0;
+  burst(la, l.x, l.y, l.color, 60, 380, 5, 1); ring(la, l.x, l.y, l.color, 130);
+  arenas.forEach(a => { a.meteors.length = 0; });
+  Sound.ko();
+  const cols = [w.color, '#ffd23f', '#ffffff', '#3ee6d0', '#ff4d8d'];
+  for (let i = 0; i < 140; i++) m.confetti.push({ x: crand() * W, y: -20 - crand() * 260, vx: (crand() - .5) * 90, vy: 90 + crand() * 170, rot: crand() * TAU, vr: (crand() - .5) * 10, s: 4 + crand() * 6, c: cols[i % cols.length] });
+  Sound.win();
+  if (!m.replay) { recordResult(w.cfg, l.cfg); if (m.tour && tour && tour.cur) tourResolve(w.cfg); }
+  if (HEADLESS) return;
+  updateOverlay(); updateStats(); drawChart();
+  toast('🏆 ' + w.name + ' wins');
+  $('#cv').setAttribute('aria-label', w.name + ' wins after ' + m.t.toFixed(1) + ' seconds');
+  if (Rec.on) Rec.stopAt = performance.now() + 2600;
+}
+function timeUp() {
+  const [A, B] = arenas, pa = A.rem / A.total, pb = B.rem / B.total;
+  const coin = rng() < .5;
+  const winner = pa === pb ? (coin ? A.ball : B.ball) : (pa < pb ? A.ball : B.ball);
+  endMatch(winner, 'time');
+}
+
+/* ---------- Per-step updates ---------- */
+function spawnMinion(owner, o) {
+  const a = arenas[owner.side]; if (!a || a.done || a.minions.length >= 12) return;
+  const ang = rr(0, TAU), sp = owner.speed0 * 1.1;
+  a.minions.push({ isMin: true, owner, side: owner.side, x: owner.x, y: owner.y, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp, r: o.r, life: o.life, mul: o.mul,
+    color: owner.color, icon: o.icon || '', ghost: !!o.ghost, hitCd: new Map(),
+    gravity: 0, bounce: 1, friction: 0, trail: [], angle: 0, boost: 0, flash: 0 });
+  puff(a, owner.x, owner.y, owner.color);
+}
+function tickBall(a, b, dt) {
+  b.flash = Math.max(0, b.flash - dt * 4);
+  b.angle += b.vx * dt / b.r * .5;
+  a.frame++;
+  if (a.frame % 2 === 0) { b.trail.push(b.x, b.y); if (b.trail.length > 20) b.trail.splice(0, 2); }
+  if (b.boost > 0) { b.boost -= dt; if (b.boost <= 0) { b.vx /= 1.6; b.vy /= 1.6; } }
+  if (b.T.tick) b.T.tick(b, dt, a);
+  b.r = Math.max(6, Math.min(b.r0 * (b.gw || 1), a.g.rMax, Math.min(a.g.hw, a.g.hh) * .45));
+  const s = Math.hypot(b.vx, b.vy);
+  if (b.gravity === 0 && s > 0 && s < b.speed0 * .5) { const k = b.speed0 * .5 / s; b.vx *= k; b.vy *= k; }
+  if (s > 2400) { const k = 2400 / s; b.vx *= k; b.vy *= k; }
+}
+function chaosStep(a, dt) {
+  const c = settings.chaos;
+  if (c.shrink) { a.shrinkT += dt * c.rate; a.k = lerp(1, .6, clamp((a.shrinkT - 6) / 50, 0, 1)); } else a.k = Math.min(1, a.k + dt * .2);
+  if (match.over) return;
+  if (c.meteors || c.boosts) {
+    a.evT -= dt;
+    if (a.evT <= 0) {
+      a.evT = (3 + rr(0, 4)) / c.rate;
+      const kinds = []; if (c.meteors) kinds.push('m'); if (c.boosts) kinds.push('b');
+      if (kinds[Math.floor(rng() * kinds.length)] === 'm') {
+        const b = a.ball, g = a.g;
+        a.meteors.push({ x: clamp(b.x + rr(-110, 110), g.cx - g.hw + 30, g.cx + g.hw - 30), y: clamp(b.y + rr(-90, 90), g.cy - g.hh + 30, g.cy + g.hh - 30), t: 0, warn: 1 });
+      } else if (a.ball.alive && a.ball.boost <= 0) {
+        const b = a.ball; b.boost = 3; b.vx *= 1.6; b.vy *= 1.6; floater(a, b.x, b.y - b.r - 10, 'BOOST!', '#ffb02e', 22); Sound.tp();
+      }
+    }
+  }
+  for (let i = a.meteors.length - 1; i >= 0; i--) {
+    const m = a.meteors[i]; m.t += dt;
+    if (m.t >= m.warn) {
+      a.meteors.splice(i, 1);
+      burst(a, m.x, m.y, '#ffa23d', 40, 360, 4.5, .8); ring(a, m.x, m.y, '#ff6a3d', 90); a.shake = Math.min(18, a.shake + 9); Sound.boom();
+      const b = a.ball, dx = b.x - m.x, dy = b.y - m.y, d = Math.hypot(dx, dy) || 1;
+      if (b.alive && d < 52 + b.r) { b.vx += dx / d * 260; b.vy += dy / d * 260; }
+      for (const q of a.g.rects) {
+        const mx = clamp(m.x, q.x0, q.x1), my = clamp(m.y, q.y0, q.y1);
+        if ((m.x - mx) ** 2 + (m.y - my) ** 2 < 52 * 52) hurtPlat(a, q.p, q.p.max * .03, null, 'chaos');
+      }
+    }
+  }
+}
+function stepArena(a, dt) {
+  const b = a.ball;
+  chaosStep(a, dt);
+  a.g = geom(a);
+  if (b.alive) {
+    tickBall(a, b, dt);
+    moveBody(b, a.g, dt, (nx, ny, imp, q) => onWall(a, b, b, 1, nx, ny, imp, q));
+  }
+  for (const p of a.plats) {
+    if (p.dead) continue;
+    p.flash = Math.max(0, p.flash - dt * 5);
+    const z = p.pz;
+    if (z.stacks > 0) {
+      z.t -= dt; z.tick += dt;
+      if (z.tick >= .5) { z.tick -= .5; const l = hurtPlat(a, p, z.stacks * z.dps * .5, z.src, 'dot'); if (l > 0 && z.src) z.src.st.dealt += l; }
+      if (z.t <= 0) z.stacks = 0;
+    }
+  }
+  for (let i = a.minions.length - 1; i >= 0; i--) {
+    const m = a.minions[i]; m.life -= dt; m.r = Math.min(m.r, a.g.rMax); m.angle += m.vx * dt / m.r * .5;
+    if (m.life <= 0 || !m.owner.alive) { puff(a, m.x, m.y, m.color); a.minions.splice(i, 1); continue; }
+    moveBody(m, a.g, dt, (nx, ny, imp, q) => onWall(a, m, m.owner, m.mul, nx, ny, imp, q));
+  }
+  fx(a, dt);
+}
+function fx(a, dt) {
+  a.shake *= Math.pow(.88, dt * 60);
+  const f = a.total > 0 ? a.rem / a.total : 0;
+  if (a.ghost > f) a.ghost = Math.max(f, a.ghost - (a.ghost - f) * dt * 2.5 - 1e-9); else a.ghost = f;
+  for (let i = a.parts.length - 1; i >= 0; i--) {
+    const p = a.parts[i]; p.life -= dt;
+    if (p.life <= 0) { a.parts[i] = a.parts[a.parts.length - 1]; a.parts.pop(); continue; }
+    if (p.ring) p.rad += p.vr * dt; else { p.vy += p.g * dt; p.vx *= .995; p.x += p.vx * dt; p.y += p.vy * dt; }
+  }
+  for (let i = a.floats.length - 1; i >= 0; i--) { const f2 = a.floats[i]; f2.t += dt; f2.y -= 46 * dt * Math.max(.2, 1 - f2.t / f2.life); if (f2.t > f2.life) a.floats.splice(i, 1); }
+}
+function burst(a, x, y, color, n, sp, size, life) {
+  for (let i = 0; i < n; i++) { const an = crand() * TAU, s = sp * (.3 + crand() * .7); a.parts.push({ x, y, vx: Math.cos(an) * s, vy: Math.sin(an) * s, g: 300, life: life * (.6 + crand() * .4), max: life, size: size * (.5 + crand()), color }); }
+  if (a.parts.length > 500) a.parts.splice(0, a.parts.length - 500);
+}
+function ring(a, x, y, color, rad) { a.parts.push({ ring: true, x, y, rad: 4, vr: rad * 5, life: .3, max: .3, color }); }
+function puff(a, x, y, color) { burst(a, x, y, color, 14, 160, 3, .4); ring(a, x, y, color, 60); }
+function floater(a, x, y, txt, col, sz) {
+  a.floats.push({ x, y, t: 0, life: 1.1, txt, col, sz: clamp(sz, 14, 48) });
+  if (a.floats.length > 28) a.floats.shift();
+}
+function sample() { const [A, B] = arenas; match.hist.push({ t: match.t, a: A.total ? A.rem / A.total : 0, b: B.total ? B.rem / B.total : 0 }); }
+
+function step(dt) {
+  const m = match;
+  if (m.state === 'cd') {
+    const before = Math.ceil(m.cd / .6); m.cd -= dt;
+    const after = Math.ceil(m.cd / .6); if (after !== before && after >= 1) Sound.tick();
+    if (m.cd <= 0) { m.state = 'fight'; Sound.start(); }
+    for (const a of arenas) fx(a, dt);
+    return;
+  }
+  m.t += dt;
+  for (const a of arenas) stepArena(a, dt);
+  if (!m.over) {
+    const fin = arenas.filter(a => a.done);
+    if (fin.length) endMatch(fin.length === 2 ? (rng() < .5 ? arenas[0].ball : arenas[1].ball) : fin[0].ball, 'clear');
+  }
+  if (!m.over) {
+    m.histT += dt; if (m.histT >= .25) { m.histT = 0; sample(); }
+    if (m.t > settings.timeLimit) timeUp();
+  } else {
+    m.overT += dt; $('#ov').style.opacity = clamp((m.overT - .5) / .3, 0, 1);
+    for (const c of m.confetti) { c.x += c.vx * dt; c.y += c.vy * dt; c.rot += c.vr * dt; c.vx += Math.sin(c.rot) * 20 * dt; }
+    m.confetti = m.confetti.filter(c => c.y < H + 30);
+  }
+}
+
+/* ---------- Match lifecycle ---------- */
+function startMatch(o = {}) {
+  const A = o.a || getF(settings.a), B = o.b || getF(settings.b);
+  rng = mulberry32(hashStr(String(settings.seed) + (o.salt ? '#' + o.salt : '')));
+  arenas = [makeArena(0, A), makeArena(1, B)];
+  arenas[0].ball.foe = arenas[1].ball; arenas[1].ball.foe = arenas[0].ball;
+  match = { state: o.ready ? 'ready' : 'cd', cd: 1.8, t: 0, over: false, winner: null, loser: null, overT: 0, hist: [], histT: 0, confetti: [],
+    opts: { a: o.a, b: o.b, salt: o.salt, tour: o.tour }, tour: !!o.tour, replay: !!o.replay, reason: '' };
+  acc = 0; sample();
+  updateOverlay(); updateStats(); drawChart();
+}
+function restart() { startMatch({ ...match.opts, replay: match.replay || (match.tour && match.over), ready: false }); }
+function replay() { startMatch({ ...match.opts, replay: true, ready: false }); }
+
+/* ==================================================================
+   6. TOURNAMENT + LEADERBOARD
+================================================================== */
+let tour = store.get('bbs2.tour', null);
+try { if (tour && !tour.rounds.every(r => r.every(m => [m.a, m.b].every(f => !f || TYPES[f.type])))) tour = null; } catch (e) { tour = null; }
+let LB = store.get('bbs2.lb', {});
+function recordResult(w, l) {
+  const e = LB[w.name] = LB[w.name] || { icon: w.icon, color: w.color, w: 0, l: 0, t: 0 };
+  e.w++; e.icon = w.icon; e.color = w.color;
+  const f = LB[l.name] = LB[l.name] || { icon: l.icon, color: l.color, w: 0, l: 0, t: 0 };
+  f.l++; store.set('bbs2.lb', LB); renderLB();
+}
+function tourStart() {
+  const list = settings.roster.filter(f => f.enabled).map(f => JSON.parse(JSON.stringify(f)));
+  if (list.length < 2) { toast('Tick at least 2 balls in the Balls tab'); return; }
+  const r = mulberry32(hashStr('T' + settings.seed));
+  for (let i = list.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [list[i], list[j]] = [list[j], list[i]]; }
+  let size = 2; while (size < list.length) size *= 2;
+  const byes = size - list.length, pairs = []; let idx = 0;
+  for (let i = 0; i < byes; i++) pairs.push([list[idx++], null]);
+  while (idx < list.length) { pairs.push([list[idx], list[idx + 1]]); idx += 2; }
+  const rounds = [pairs.map(p => ({ a: p[0], b: p[1], w: null }))];
+  for (let n = size / 4; n >= 1; n /= 2) rounds.push(Array.from({ length: n }, () => ({ a: null, b: null, w: null })));
+  tour = { rounds, cur: null, champion: null };
+  rounds[0].forEach((m, i) => { if (!m.b) tourSet(0, i, m.a); });
+  store.set('bbs2.tour', tour); renderBracket();
+  tourNext();
+}
+function tourSet(r, i, cfg) {
+  tour.rounds[r][i].w = cfg;
+  if (r + 1 < tour.rounds.length) { const nm = tour.rounds[r + 1][i >> 1]; if (i % 2 === 0) nm.a = cfg; else nm.b = cfg; }
+  else { tour.champion = cfg; const e = LB[cfg.name] = LB[cfg.name] || { icon: cfg.icon, color: cfg.color, w: 0, l: 0, t: 0 }; e.t++; store.set('bbs2.lb', LB); renderLB(); }
+}
+function tourPending() {
+  if (!tour || tour.champion) return null;
+  for (let r = 0; r < tour.rounds.length; r++) for (let i = 0; i < tour.rounds[r].length; i++) { const m = tour.rounds[r][i]; if (m.a && m.b && !m.w) return { r, i, m }; }
+  return null;
+}
+function tourNext() {
+  const p = tourPending();
+  if (!p) { toast(tour && tour.champion ? 'Tournament finished. Start a new one.' : 'Start a tournament first'); return; }
+  tour.cur = { r: p.r, i: p.i };
+  startMatch({ a: p.m.a, b: p.m.b, salt: p.r + '-' + p.i, tour: true });
+  Sound.init(); match.state = 'cd'; updateOverlay(); renderBracket();
+  $('#stage').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+function tourResolve(cfgWinner) {
+  const m = tour.rounds[tour.cur.r][tour.cur.i];
+  if (m.w) return;
+  const win = m.a.id === cfgWinner.id ? m.a : m.b;
+  tourSet(tour.cur.r, tour.cur.i, win);
+  store.set('bbs2.tour', tour); renderBracket();
+  if (settings.autoNext && !tour.champion) setTimeout(() => { if (match.over && match.tour && !Rec.on) tourNext(); }, 3000);
+}
+
+/* ==================================================================
+   7. RENDERING
+================================================================== */
+const PALS = {
+  dark:  { page: '#0a0914', arena: '#14112a', floor: '#1c1838', grid: 'rgba(255,255,255,.045)', text: '#ffffff', muted: 'rgba(255,255,255,.6)', bar: 'rgba(255,255,255,.13)', pill: 'rgba(20,17,42,.92)' },
+  light: { page: '#d5dcf5', arena: '#e9eeff', floor: '#ffffff', grid: 'rgba(40,30,110,.07)', text: '#1b1736', muted: 'rgba(27,23,54,.6)', bar: 'rgba(27,23,54,.14)', pill: 'rgba(255,255,255,.95)' }
+};
+let PAL = PALS.dark;
+
+function rrect(c, x, y, w, h, r) { r = Math.min(r, w / 2, h / 2); c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); }
+function outlined(c, txt, x, y, fill, stroke = 'rgba(0,0,0,.75)', lw = 4) { c.lineJoin = 'round'; c.lineWidth = lw; c.strokeStyle = stroke; c.strokeText(txt, x, y); c.fillStyle = fill; c.fillText(txt, x, y); }
+function fitFont(c, txt, maxW, px, weight = 900) { c.font = `${weight} ${px}px ${FONT}`; const w = c.measureText(txt).width; if (w > maxW) c.font = `${weight} ${Math.max(8, px * maxW / w)}px ${FONT}`; }
+
+function render(c, S) {
+  c.setTransform(S, 0, 0, S, 0, 0);
+  c.fillStyle = PAL.page; c.fillRect(0, 0, W, H);
+  for (const a of arenas) drawArena(c, a);
+  drawDivider(c);
+  if (match.state === 'cd') drawCountdown(c);
+  else if (match.state === 'fight' && match.t < .6 && !match.over) { c.globalAlpha = 1 - match.t / .6; c.textAlign = 'center'; c.textBaseline = 'middle'; c.font = `900 96px ${FONT}`; outlined(c, 'FIGHT!', W / 2, H / 2, '#ffd23f', '#000', 8); c.globalAlpha = 1; }
+  if (match.over) drawWinner(c);
+}
+function shapePath(c, g) {
+  if (g.shape === 'circle') { c.beginPath(); c.arc(g.cx, g.cy, g.R, 0, TAU); }
+  else rrect(c, g.cx - g.hw, g.cy - g.hh, g.hw * 2, g.hh * 2, 14);
+}
+function drawArena(c, a) {
+  const g = a.g, b = a.ball;
+  c.save();
+  c.beginPath(); c.rect(0, a.top, W, AH); c.clip();
+  c.fillStyle = PAL.arena; c.fillRect(0, a.top, W, AH);
+  const sk = REDUCE ? 0 : a.shake * 2; c.translate((crand() - .5) * sk, (crand() - .5) * sk);
+  shapePath(c, g); c.fillStyle = PAL.floor; c.fill();
+  c.save(); shapePath(c, g); c.clip(); c.strokeStyle = PAL.grid; c.lineWidth = 1; c.beginPath();
+  for (let x = g.cx - 360; x < g.cx + 360; x += 36) { c.moveTo(x, g.cy - 260); c.lineTo(x, g.cy + 260); }
+  for (let y = g.cy - 260; y < g.cy + 260; y += 36) { c.moveTo(g.cx - 360, y); c.lineTo(g.cx + 360, y); }
+  c.stroke(); c.restore();
+  for (const q of g.rects) {
+    const p = q.p, w = q.x1 - q.x0, h = q.y1 - q.y0, fr = clamp(p.hp / p.max, 0, 1);
+    rrect(c, q.x0, q.y0, w, h, 4); c.fillStyle = mix(b.color, '#111111', .65); c.fill();
+    c.save(); rrect(c, q.x0, q.y0, w, h, 4); c.clip();
+    c.fillStyle = p.flash > 0 ? mix(b.color, '#ffffff', .3 + .7 * p.flash) : mix(b.color, '#ffffff', .12);
+    c.fillRect(q.x0, q.y0, w * fr, h); c.restore();
+    rrect(c, q.x0, q.y0, w, h, 4); c.strokeStyle = p.pz.stacks > 0 ? '#8dff5a' : b.color; c.lineWidth = 2;
+    if (p.pz.stacks > 0) c.setLineDash([5, 4]); c.stroke(); c.setLineDash([]);
+    c.textAlign = 'center'; c.textBaseline = 'middle'; c.font = `800 ${Math.max(8, Math.min(11, h - 3))}px ${FONT}`;
+    outlined(c, fmt(p.hp), (q.x0 + q.x1) / 2, (q.y0 + q.y1) / 2 + .5, '#fff', 'rgba(0,0,0,.85)', 3);
+  }
+  shapePath(c, g); c.strokeStyle = b.color; c.lineWidth = 5; c.stroke();
+  for (const m of a.meteors) {
+    const f = m.t / m.warn;
+    c.fillStyle = `rgba(255,70,50,${.12 + .12 * Math.sin(m.t * 25)})`; c.beginPath(); c.arc(m.x, m.y, 52, 0, TAU); c.fill();
+    c.strokeStyle = '#ff5a3d'; c.lineWidth = 2; c.setLineDash([6, 6]); c.beginPath(); c.arc(m.x, m.y, 52, 0, TAU); c.stroke(); c.setLineDash([]);
+    const ry = m.y - (1 - f) * 320; c.strokeStyle = 'rgba(255,170,60,.6)'; c.lineWidth = 6; c.beginPath(); c.moveTo(m.x + 30, ry - 90); c.lineTo(m.x, ry); c.stroke();
+    c.fillStyle = '#ffb347'; c.beginPath(); c.arc(m.x, ry, 13, 0, TAU); c.fill();
+  }
+  for (const m of a.minions) drawBall(c, m, m.ghost ? .6 : .9);
+  if (b.alive) drawBall(c, b, 1);
+  for (const p of a.parts) {
+    const al = clamp(p.life / p.max, 0, 1);
+    if (p.ring) { c.globalAlpha = al; c.strokeStyle = p.color; c.lineWidth = 3; c.beginPath(); c.arc(p.x, p.y, p.rad, 0, TAU); c.stroke(); }
+    else { c.globalAlpha = al; c.fillStyle = p.color; c.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size); }
+  }
+  c.globalAlpha = 1;
+  c.textAlign = 'center'; c.textBaseline = 'middle';
+  for (const f of a.floats) {
+    c.globalAlpha = 1 - clamp((f.t - f.life * .6) / (f.life * .4), 0, 1);
+    const pop = 1 + .5 * Math.max(0, 1 - f.t * 6);
+    fitFont(c, f.txt, 180, f.sz * pop);
+    outlined(c, f.txt, clamp(f.x, 60, W - 60), f.y, f.col, 'rgba(0,0,0,.85)', 4);
+  }
+  c.globalAlpha = 1;
+  c.restore();
+  drawHUD(c, a);
+}
+function drawBall(c, b, alpha) {
+  const { x, y, r } = b, tr = b.trail;
+  for (let i = 0; i < tr.length; i += 2) { const f = i / tr.length; c.globalAlpha = f * .25 * alpha; c.fillStyle = b.boost > 0 ? '#ffb02e' : b.color; c.beginPath(); c.arc(tr[i], tr[i + 1], r * (.35 + .55 * f), 0, TAU); c.fill(); }
+  c.globalAlpha = alpha;
+  const gr = c.createRadialGradient(x - r * .35, y - r * .4, r * .1, x, y, r);
+  gr.addColorStop(0, mix(b.color, '#ffffff', .5)); gr.addColorStop(1, b.color);
+  c.fillStyle = gr; c.beginPath(); c.arc(x, y, r, 0, TAU); c.fill();
+  c.strokeStyle = 'rgba(0,0,0,.4)'; c.lineWidth = 2; c.stroke();
+  if (b.icon) { c.save(); c.translate(x, y); c.rotate(b.angle); c.font = `${r * 1.1}px ${EMOJI}`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = '#fff'; c.fillText(b.icon, 0, r * .05); c.restore(); }
+  if (b.flash > 0) { c.globalAlpha = b.flash * .6 * alpha; c.fillStyle = '#fff'; c.beginPath(); c.arc(x, y, r, 0, TAU); c.fill(); c.globalAlpha = alpha; }
+  if (b.boost > 0) { c.strokeStyle = '#ffb02e'; c.lineWidth = 3; c.beginPath(); c.arc(x, y, r + 4, 0, TAU); c.stroke(); }
+  c.globalAlpha = 1;
+}
+function bar(c, x, y, w, h, frac, ghost, col) {
+  rrect(c, x, y, w, h, h / 2); c.fillStyle = PAL.bar; c.fill();
+  c.save(); rrect(c, x, y, w, h, h / 2); c.clip();
+  if (ghost > frac) { c.fillStyle = 'rgba(255,255,255,.55)'; c.fillRect(x, y, w * ghost, h); }
+  const g = c.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, mix(col, '#ffffff', .35)); g.addColorStop(1, col);
+  c.fillStyle = g; c.fillRect(x, y, w * frac, h); c.restore();
+}
+function drawHUD(c, a) {
+  const b = a.ball, top = a.top, x = 16, w = W - 32;
+  c.textBaseline = 'middle'; c.textAlign = 'left'; c.font = `900 20px ${FONT}`; c.fillStyle = PAL.text;
+  c.fillText(`${b.icon} ${b.name}`, x, top + 15);
+  c.textAlign = 'right'; c.fillStyle = PAL.muted; const tag = `${b.T.label} · ${b.T.short}`; fitFont(c, tag, 250, 13, 700); c.fillText(tag, x + w, top + 15);
+
+  bar(c, x, top + 30, w, 24, a.total ? a.rem / a.total : 0, a.ghost, b.color);
+  const label = a.done ? 'ALL PLATFORMS DESTROYED' : `${a.left}/${a.plats.length} platforms · ${fmt(a.rem)} HP left`;
+  c.textAlign = 'center'; fitFont(c, label, w - 16, 15); outlined(c, label, x + w / 2, top + 43, '#fff', 'rgba(0,0,0,.8)', 3.5);
+
+  const nextDmg = dmgOf(b);
+  const last = b.lastHit;
+  const lastDealt = last ? last.lost : 0;
+  const df = clamp(Math.log10(nextDmg + 1) / Math.log10(a.total / Math.max(1, a.plats.length) + 1), 0, 1);
+  bar(c, x, top + 62, w, 16, df, 0, '#ff7a3d');
+
+  c.font = `800 11px ${FONT}`;
+  c.textAlign = 'left';
+  outlined(c, `NEXT ${fmt(nextDmg)}${b.cfg.fixed ? ' (fixed)' : ''}`, x + 8, top + 70.5, '#fff', 'rgba(0,0,0,.8)', 3);
+
+  c.textAlign = 'right';
+  const capped = last && last.lost < last.raw - 0.5;
+  const hudTxt = b.T.hud ? ' · ' + b.T.hud(b) : '';
+  const rightTxt = (last ? `last ${fmt(lastDealt)}${capped ? ' (capped)' : ''} · hits ${b.hits}` : `hits ${b.hits}`) + hudTxt;
+  outlined(c, rightTxt, x + w - 8, top + 70.5, '#fff', 'rgba(0,0,0,.8)', 3);
+}
+function drawDivider(c) {
+  const txt = settings.rec.watermark ? (settings.rec.wmText || 'orbclash') : 'VS';
+  c.font = `900 13px ${FONT}`; const tw = c.measureText(txt).width + 24;
+  rrect(c, W / 2 - tw / 2, AH - 12, tw, 24, 12); c.fillStyle = PAL.pill; c.fill();
+  c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = PAL.text; c.fillText(txt, W / 2, AH + 1);
+}
+function drawCountdown(c) {
+  const n = clamp(Math.ceil(match.cd / .6), 1, 3), f = 1 - (match.cd % .6) / .6;
+  c.textAlign = 'center'; c.textBaseline = 'middle'; c.globalAlpha = .95;
+  c.font = `900 ${Math.round(150 * (1.2 - .2 * f))}px ${FONT}`; outlined(c, String(n), W / 2, H / 2, '#ffd23f', '#000', 10); c.globalAlpha = 1;
+}
+function drawWinner(c) {
+  const m = match, w = m.winner, l = m.loser, al = clamp((m.overT - .35) / .45, 0, 1), wa = arenas[w.side], la = arenas[l.side];
+  c.globalAlpha = al * .6; c.fillStyle = '#05040d'; c.fillRect(0, 0, W, H); c.globalAlpha = 1;
+  for (const k of m.confetti) { c.save(); c.translate(k.x, k.y); c.rotate(k.rot); c.fillStyle = k.c; c.fillRect(-k.s / 2, -k.s / 3, k.s, k.s * .66); c.restore(); }
+  if (al <= 0) return;
+  const cx = W / 2, cw = W - 56, ch = 440, x0 = 28, y0 = H / 2 - ch / 2 - 10, sc = .92 + .08 * al;
+  c.save(); c.globalAlpha = al; c.translate(cx, H / 2); c.scale(sc, sc); c.translate(-cx, -H / 2);
+  c.shadowColor = w.color; c.shadowBlur = 36; rrect(c, x0, y0, cw, ch, 26); c.fillStyle = '#14112a'; c.fill(); c.shadowBlur = 0;
+  rrect(c, x0, y0, cw, ch, 26); c.strokeStyle = w.color; c.lineWidth = 4; c.stroke();
+  c.textAlign = 'center'; c.textBaseline = 'middle';
+  const champ = m.tour && tour && tour.champion && tour.champion.id === w.cfg.id;
+  c.font = `800 20px ${FONT}`; c.fillStyle = '#ffd23f'; c.fillText(champ ? '🏆 TOURNAMENT CHAMPION' : '🏆 WINNER', cx, y0 + 34);
+  c.font = `80px ${EMOJI}`; c.fillStyle = '#fff'; c.fillText(w.icon, cx, y0 + 106);
+  fitFont(c, w.name.toUpperCase(), cw - 40, 56); outlined(c, w.name.toUpperCase(), cx, y0 + 190, w.color, '#000', 7);
+  c.font = `700 15px system-ui,sans-serif`; c.fillStyle = 'rgba(255,255,255,.85)';
+  c.fillText(m.reason === 'time' ? 'Time limit: removed the most platform HP' : 'Broke every platform first', cx, y0 + 228);
+  const bw = (cw - 54) / 2, by = y0 + 250, bh = 104;
+  [[w, wa, x0 + 18, true], [l, la, x0 + 36 + bw, false]].forEach(([b, a, bx, win]) => {
+    rrect(c, bx, by, bw, bh, 14); c.fillStyle = win ? 'rgba(255,255,255,.09)' : 'rgba(255,255,255,.04)'; c.fill();
+    rrect(c, bx, by, bw, bh, 14); c.strokeStyle = win ? b.color : 'rgba(255,255,255,.18)'; c.lineWidth = 2; c.stroke();
+    c.textAlign = 'left'; c.fillStyle = win ? '#fff' : 'rgba(255,255,255,.7)'; fitFont(c, `${b.icon} ${b.name}`, bw - 24, 16, 800); c.fillText(`${b.icon} ${b.name}`, bx + 12, by + 20);
+    c.font = `600 13px system-ui,sans-serif`; c.fillStyle = 'rgba(255,255,255,.72)';
+    c.fillText(`Platforms  ${b.st.broken}/${a.plats.length}`, bx + 12, by + 46);
+    c.fillText(`Hits  ${b.st.landed}`, bx + 12, by + 67);
+    c.fillText(`Damage  ${fmt(b.st.dealt)}`, bx + 12, by + 88);
+  });
+  c.textAlign = 'center'; c.font = `600 13px system-ui,sans-serif`; c.fillStyle = 'rgba(255,255,255,.55)';
+  c.fillText(`Finished in ${m.t.toFixed(1)} s`, cx, y0 + 372);
+  c.restore(); c.globalAlpha = 1;
+}
+function drawChart() {
+  const cv = $('#chart'); if (!cv || !match || !cv.clientWidth || !match.hist.length) return;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2), w = cv.clientWidth, h = cv.clientHeight;
+  if (cv.width !== Math.round(w * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
+  const c = cv.getContext('2d'); c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, w, h);
+  const L = 38, R = 10, T = 12, B = 22, pw = w - L - R, ph = h - T - B, hist = match.hist, tmax = Math.max(5, hist[hist.length - 1].t);
+  c.font = '11px system-ui,sans-serif'; c.fillStyle = PAL.muted; c.strokeStyle = PAL.grid.replace(/[\d.]+\)$/, '.18)'); c.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) { const y = T + ph * i / 4; c.beginPath(); c.moveTo(L, y); c.lineTo(L + pw, y); c.stroke(); c.textAlign = 'right'; c.textBaseline = 'middle'; c.fillText(100 - i * 25 + '%', L - 6, y); }
+  c.textAlign = 'center'; c.textBaseline = 'top';
+  for (let i = 0; i <= 4; i++) c.fillText((tmax * i / 4).toFixed(0) + 's', L + pw * i / 4, h - B + 6);
+  [[0, 'a'], [1, 'b']].forEach(([s, key]) => {
+    c.strokeStyle = arenas[s].ball.color; c.lineWidth = 3; c.lineJoin = 'round'; c.beginPath();
+    hist.forEach((p, i) => { const x = L + pw * p.t / tmax, y = T + ph * (1 - p[key]); i ? c.lineTo(x, y) : c.moveTo(x, y); });
+    c.stroke();
+  });
+}
+function updateStats() {
+  const el = $('#statTable'); if (!el || !arenas.length) return;
+  const rows = arenas.map(a => {
+    const b = a.ball, s = b.st;
+    const eff = s.biggestEffective || 0;
+    return `<tr><td>${esc(b.icon)} ${esc(b.name)}</td><td>${s.landed}</td><td>${fmt(s.dealt)}</td><td>${fmt(eff)}</td><td>${s.broken}/${a.plats.length}</td></tr>`;
+  }).join('');
+  el.innerHTML = `<table><thead><tr><th>Ball</th><th>Hits</th><th>Total dealt</th><th>Biggest dealt</th><th>Platforms</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+/* ==================================================================
+   8. RECORDING — MP4 preferred, WebM fallback
+================================================================== */
+const Rec = {
+  on: false, rec: null, chunks: [], canvas: null, ctx: null, stopAt: 0, mime: '', t0: 0, url: '', S: 2, lastLabel: '', finishing: false,
+  supported: !!(window.MediaRecorder && HTMLCanvasElement.prototype.captureStream),
+  pickMime() {
+    const mp4 = ['video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'video/mp4;codecs=h264,aac', 'video/mp4;codecs=avc1', 'video/mp4'];
+    const webm = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
+    const list = settings.rec.preferMp4 ? [...mp4, ...webm] : [...webm, ...mp4];
+    for (const m of list) { try { if (MediaRecorder.isTypeSupported(m)) return m; } catch (e) {} }
+    return '';
+  },
+  start() {
+    if (this.on) return;
+    if (!this.supported) { toast('This browser cannot record video. Try Chrome, Edge or Firefox.'); return; }
+    Sound.init(); paused = false; updateOutputs();
+    const [cw, ch] = settings.rec.res === '720' ? [720, 1280] : [1080, 1920], fps = +settings.rec.fps || 60;
+    this.S = cw / W;
+    if (!this.canvas) {
+      this.canvas = document.createElement('canvas');
+      this.canvas.setAttribute('aria-hidden', 'true');
+      this.canvas.style.cssText = 'position:fixed;left:-99999px;top:0;width:10px;height:10px;pointer-events:none';
+      document.body.appendChild(this.canvas);
+    }
+    this.canvas.width = cw; this.canvas.height = ch; this.ctx = this.canvas.getContext('2d');
+    this.on = true; this.finishing = false;
+    startMatch({ ...match.opts, replay: true, ready: false });
+    render(this.ctx, this.S);
+    let cs;
+    try { cs = this.canvas.captureStream(fps); } catch (e) { this.on = false; toast('Recording could not start'); return; }
+    const as = Sound.stream();
+    if (as) as.getAudioTracks().forEach(t => cs.addTrack(t));
+    this.mime = this.pickMime();
+    const bps = cw >= 1080 ? 12e6 : 6e6;
+    const opts = { videoBitsPerSecond: bps };
+    if (this.mime) opts.mimeType = this.mime;
+    try { this.rec = new MediaRecorder(cs, opts); }
+    catch (e) { try { this.rec = new MediaRecorder(cs); } catch (e2) { this.on = false; toast('Recording could not start'); return; } }
+    this.chunks = [];
+    this.rec.ondataavailable = e => { if (e.data && e.data.size) this.chunks.push(e.data); };
+    this.rec.onerror = () => { toast('Recording failed'); this.stop(); };
+    this.rec.onstop = () => this.finish();
+    try { this.rec.start(250); } catch (e) { this.on = false; toast('Recording could not start'); return; }
+    this.stopAt = 0; this.t0 = performance.now(); this.lastLabel = '';
+    document.body.classList.add('recording');
+    if (settings.rec.hideUI) document.body.classList.add('clean');
+    this.label(); updateOverlay();
+    toast('Recording started (' + (this.mime.includes('mp4') ? 'MP4' : 'WebM') + '). It stops when the battle ends.');
+  },
+  label() {
+    const sec = Math.floor((performance.now() - this.t0) / 1000), txt = '■ Stop recording ' + Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
+    if (txt !== this.lastLabel) { this.lastLabel = txt; $('#stopRec').textContent = txt; }
+  },
+  stop() {
+    if (!this.on) return;
+    this.on = false;
+    if (this.rec) {
+      this.rec.ondataavailable = null;
+      try { if (this.rec.state !== 'inactive') this.rec.stop(); else this.finish(); } catch (e) { this.finish(); }
+    } else this.finish();
+    document.body.classList.remove('clean', 'recording'); updateOverlay();
+  },
+  finish() {
+    if (this.finishing) return;
+    this.finishing = true;
+    const type = (this.rec && this.rec.mimeType) || this.mime || 'video/webm', ext = type.includes('mp4') ? 'mp4' : 'webm';
+    const blob = new Blob(this.chunks, { type: type.split(';')[0] });
+    this.chunks = [];
+    if (!blob.size) { toast('Nothing was recorded. Try again.'); return; }
+    if (this.url) URL.revokeObjectURL(this.url);
+    this.url = URL.createObjectURL(blob);
+    const names = arenas.map(x => x.ball.name.replace(/\W+/g, '') || 'ball'), file = `orbclash-${names[0]}-vs-${names[1]}-${Date.now()}.${ext}`;
+    const v = $('#recVideo'), dl = $('#recDl');
+    v.onloadedmetadata = () => { if (v.duration === Infinity) { v.onloadedmetadata = null; v.ontimeupdate = () => { v.ontimeupdate = null; v.currentTime = 0; }; v.currentTime = 1e101; } };
+    v.src = this.url; dl.href = this.url; dl.download = file; $('#recOut').hidden = false;
+    $('#recInfo').textContent = `${file} · ${(blob.size / 1048576).toFixed(1)} MB · ${ext.toUpperCase()}`;
+    const tab = document.querySelector('.tabs [data-tab="rec"]'); if (tab) tab.click();
+    try { dl.click(); } catch (e) {}
+    toast(ext.toUpperCase() + ' ready. Use the Download button if it did not save.');
+  },
+  discard() {
+    const v = $('#recVideo'); v.removeAttribute('src'); try { v.load(); } catch (e) {}
+    if (this.url) { URL.revokeObjectURL(this.url); this.url = ''; }
+    $('#recOut').hidden = true;
+  }
+};
+
+/* ==================================================================
+   9. UI
+================================================================== */
+let toastT = 0;
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 2400); }
+
+function updateOverlay() {
+  const ov = $('#ov'); ov.innerHTML = ''; ov.className = 'overlay'; ov.style.top = ov.style.height = '';
+  const add = (txt, cls, fn) => { const b = document.createElement('button'); b.className = 'btn ' + cls; b.textContent = txt; b.onclick = fn; ov.appendChild(b); };
+  if (Rec.on || !match) { ov.hidden = true; return; }
+  ov.hidden = false; ov.style.opacity = match.over ? 0 : 1;
+  if (match.state === 'ready') { ov.classList.add('center'); add('▶ Start battle', 'pri big', () => { Sound.init(); match.state = 'cd'; updateOverlay(); }); }
+  else if (match.over) {
+    ov.classList.add('win');
+    ov.style.top = ((960 / 2 - 440 / 2 - 10 + 440 - 58) / 960 * 100) + '%'; ov.style.height = (42 / 960 * 100) + '%';
+    add('↻ Replay', '', replay);
+    if (match.tour) { if (tour && tour.champion) add('🏆 New bracket', 'pri', tourStart); else add('Next ▶', 'pri', tourNext); }
+    else add('🎲 New seed', 'pri', () => { settings.seed = String(Math.floor(Math.random() * 90000) + 10000); applyUI(); save(); startMatch({}); });
+    add('⏺ Rec', '', () => Rec.start());
+  } else ov.hidden = true;
+}
+
+function renderSelects() {
+  const opts = settings.roster.map(f => `<option value="${f.id}">${esc(f.icon)} ${esc(f.name)}</option>`).join('');
+  $('#selA').innerHTML = opts; $('#selB').innerHTML = opts; $('#selA').value = settings.a; $('#selB').value = settings.b;
+}
+let editId = null;
+function refreshReady() { if (match && match.state === 'ready' && !match.tour && !match.replay) startMatch({ ready: true }); }
+function renderRoster() {
+  const box = $('#roster'); box.innerHTML = '';
+  settings.roster.forEach(f => {
+    const row = document.createElement('div'); row.className = 'rrow' + (f.id === editId ? ' sel' : '');
+    row.innerHTML = `<input type="checkbox" ${f.enabled ? 'checked' : ''} aria-label="Include ${esc(f.name)} in tournaments"><span class="dot" style="background:${esc(f.color)};color:${esc(f.color)}"></span><span class="meta"><span class="name">${esc(f.icon)} ${esc(f.name)}</span><span class="fm">${esc(TYPES[f.type].short)}</span></span><span class="type${TYPES[f.type].group === 'special' ? ' sp' : ''}">${TYPES[f.type].group === 'special' ? 'special' : 'math'}</span>`;
+    row.firstChild.onchange = e => { f.enabled = e.target.checked; save(); };
+    row.onclick = e => { if (e.target === row.firstChild) return; editId = f.id; renderRoster(); fillEditor(); };
+    box.appendChild(row);
+  });
+  $('#rosterCount').textContent = settings.roster.length;
+}
+const EDITOR_FIELDS = ['name', 'icon', 'color', 'type', 'dmg', 'fixed', 'speed', 'size', 'gravity', 'bounce', 'friction'];
+function curEdit() { return settings.roster.find(f => f.id === editId) || settings.roster[0]; }
+function fillEditor() {
+  const f = curEdit(); editId = f.id;
+  $('#ed-name').value = f.name; $('#ed-icon').value = f.icon; $('#ed-color').value = f.color; $('#ed-type').value = f.type;
+  $('#ed-dmg').value = fmtExact(f.dmg); $('#ed-fixed').value = f.fixed ? '1' : '0';
+  ['speed', 'size', 'gravity', 'bounce', 'friction'].forEach(k => $('#ed-' + k).value = f[k]);
+  const T = TYPES[f.type];
+  $('#typeDesc').innerHTML = esc(T.desc) + `<br><span class="fx">${esc(T.formula)}</span><br>n = hits landed so far · the first hit deals 1 · no damage cap`;
+}
+function bindEditor() {
+  const types = Object.keys(TYPES).map(k => `<option value="${k}">${TYPES[k].icon} ${TYPES[k].label}</option>`).join('');
+  $('#ed-type').innerHTML = types; $('#addType').innerHTML = types;
+  EDITOR_FIELDS.forEach(k => {
+    const el = $('#ed-' + k);
+    el.addEventListener(k === 'type' || k === 'fixed' ? 'change' : 'input', () => {
+      const f = curEdit();
+      if (k === 'name') f.name = el.value.slice(0, 16) || 'Ball';
+      else if (k === 'icon') f.icon = el.value || '●';
+      else if (k === 'color') f.color = el.value;
+      else if (k === 'fixed') f.fixed = el.value === '1';
+      else if (k === 'type') { f.type = el.value; applyDefaults(f); fillEditor(); }
+      else {
+        const v = k === 'dmg' ? parseBig(el.value) : parseFloat(el.value); if (!Number.isFinite(v)) return;
+        f[k] = k === 'size' ? clamp(v, 8, 70) : k === 'speed' ? clamp(v, 30, 1500) : k === 'bounce' ? clamp(v, .2, 1.3) : k === 'friction' ? clamp(v, 0, .6) : k === 'gravity' ? clamp(v, 0, 4000) : Math.max(0, v);
+      }
+      renderRoster(); renderSelects(); save(); refreshReady();
+    });
+  });
+  $('#bAdd').onclick = () => { const f = makeFighter($('#addType').value); f.name += ' ' + (settings.roster.length + 1); settings.roster.push(f); editId = f.id; renderRoster(); renderSelects(); fillEditor(); save(); toast('Ball added'); };
+  $('#bRestoreAll').onclick = () => {
+    const have = new Set(settings.roster.map(f => f.type));
+    let added = 0;
+    for (const type of Object.keys(TYPES)) {
+      if (have.has(type)) continue;
+      settings.roster.push(makeFighter(type));
+      added++;
+    }
+    if (added === 0) { toast('All ball types are already in the roster'); return; }
+    renderRoster(); renderSelects(); fillEditor(); save(); refreshReady();
+    toast('Restored ' + added + ' ball' + (added > 1 ? 's' : ''));
+  };
+  $('#bReset').onclick = () => { applyDefaults(curEdit()); fillEditor(); save(); refreshReady(); };
+  $('#bDelete').onclick = () => {
+    if (settings.roster.length <= 2) { toast('Keep at least 2 balls'); return; }
+    settings.roster = settings.roster.filter(f => f.id !== editId); editId = settings.roster[0].id;
+    if (!settings.roster.some(f => f.id === settings.a)) settings.a = settings.roster[0].id;
+    if (!settings.roster.some(f => f.id === settings.b)) settings.b = settings.roster[1].id;
+    renderRoster(); renderSelects(); fillEditor(); save(); refreshReady();
+  };
+}
+function renderBracket() {
+  const el = $('#bracket'); if (!tour) { el.innerHTML = '<p class="hint">No tournament yet.</p>'; return; }
+  const R = tour.rounds.length, name = r => r === R - 1 ? 'Final' : r === R - 2 ? 'Semifinals' : r === R - 3 ? 'Quarterfinals' : 'Round ' + (r + 1);
+  const side = (f, m) => !f ? '<div class="l">…</div>' : `<div class="${m.w ? (m.w.id === f.id ? 'w' : 'l') : ''}"><span class="dot" style="background:${esc(f.color)};color:${esc(f.color)};width:10px;height:10px;box-shadow:none"></span>${esc(f.icon)} ${esc(f.name)}</div>`;
+  el.innerHTML = tour.rounds.map((rd, r) => `<div class="bcol"><h4>${name(r)}</h4>${rd.map((m, i) => `<div class="bm ${tour.cur && tour.cur.r === r && tour.cur.i === i && !m.w ? 'cur' : ''}">${side(m.a, m)}${m.b || r > 0 ? side(m.b, m) : '<div class="l">bye</div>'}</div>`).join('')}</div>`).join('')
+    + (tour.champion ? `<div class="bcol"><h4>Champion</h4><div class="bm cur"><div class="w">🏆 ${esc(tour.champion.icon)} ${esc(tour.champion.name)}</div></div></div>` : '');
+}
+function renderLB() {
+  const rows = Object.entries(LB).sort((a, b) => b[1].t - a[1].t || b[1].w - a[1].w).slice(0, 12);
+  $('#lb').innerHTML = rows.length ? `<table><thead><tr><th>Ball</th><th>W</th><th>L</th><th>Win %</th><th>Titles</th></tr></thead><tbody>${rows.map(([n, e]) => `<tr><td>${esc(e.icon)} ${esc(n)}</td><td>${e.w}</td><td>${e.l}</td><td>${Math.round(100 * e.w / Math.max(1, e.w + e.l))}%</td><td>${e.t}</td></tr>`).join('')}</tbody></table>` : '<p class="hint">Finish a battle and the leaderboard fills in.</p>';
+}
+function renderPresets() {
+  const P = store.get('bbs2.presets', {});
+  $('#pList').innerHTML = Object.keys(P).length ? Object.keys(P).map(n => `<option>${esc(n)}</option>`).join('') : '<option value="">No saved presets</option>';
+}
+const exportable = () => JSON.parse(JSON.stringify(settings));
+function applySettings(obj) { settings = normalize(obj); editId = null; applyAll(); startMatch({ ready: true }); save(); }
+
+function renderHpList() {
+  const box = $('#hpList'); if (!box) return;
+  box.innerHTML = '';
+  for (let i = 0; i < settings.arena.layers; i++) {
+    const l = document.createElement('label'); l.className = 'field'; l.innerHTML = `<span>Layer ${i + 1}${i === 0 ? ' (top)' : ''}</span>`;
+    const inp = document.createElement('input'); inp.type = 'text'; inp.inputMode = 'decimal'; inp.autocomplete = 'off'; inp.value = fmtExact(settings.arena.hps[i]);
+    inp.addEventListener('input', () => {
+      const v = parseBig(inp.value); if (!Number.isFinite(v) || v < 1) return;
+      settings.arena.hps[i] = Math.min(v, MAX_HP); save(); startMatch({ ...match.opts, ready: match.state === 'ready', replay: false }); updateOutputs();
+    });
+    l.appendChild(inp); box.appendChild(l);
+  }
+}
+function fillHps(kind) {
+  const a = settings.arena, n = a.layers, base = a.platHp;
+  for (let i = 0; i < 8; i++) {
+    a.hps[i] = kind === 'up' ? base * Math.pow(2, i) : kind === 'down' ? base * Math.pow(2, Math.max(0, n - 1 - i)) : kind === 'boss' ? (i === n - 1 ? base * 10 : base) : base;
+    a.hps[i] = clamp(a.hps[i], 1, MAX_HP);
+  }
+  renderHpList(); save(); startMatch({ ...match.opts, ready: match.state === 'ready', replay: false }); updateOutputs();
+}
+function renderFormulas() {
+  const box = $('#formulaList'); if (!box) return;
+  box.innerHTML = Object.keys(TYPES).map(k => {
+    const T = TYPES[k], terms = [0, 1, 2, 3, 4, 5, 6].map(i => fmt(T.seq(i))).join(', ');
+    return `<div class="fml" style="--c:${T.color}"><div class="fh"><span>${esc(T.icon)}</span><b>${esc(T.label)}</b>${T.group === 'special' ? '<em>special</em>' : ''}</div><code>${esc(T.formula)}</code><div class="ft">${esc(terms)}…</div></div>`;
+  }).join('');
+}
+function updateOutputs() {
+  $('#oTs').textContent = settings.timeScale.toFixed(2) + '×';
+  $('#oSize').textContent = Math.round(settings.arena.size * 100) + '%';
+  $('#oLayers').textContent = settings.arena.layers;
+  const ar = settings.arena;
+  $('#oMul').textContent = ar.platMul.toFixed(2) + '×'; $('#oMulA').textContent = ar.mulA.toFixed(2) + '×'; $('#oMulB').textContent = ar.mulB.toFixed(2) + '×';
+  $('#oVol').textContent = Math.round(settings.sound.vol * 100) + '%';
+  $('#hpScale').hidden = ar.hpMode !== 'scale'; $('#hpCustom').hidden = ar.hpMode !== 'custom'; $('#hpBase').hidden = ar.hpMode === 'custom';
+  if (arenas.length) $('#hpTotal').textContent = 'Total platform HP: top ' + fmt(arenas[0].total) + ' · bottom ' + fmt(arenas[1].total);
+  const pl = $('#a-plat'); if (pl && document.activeElement !== pl) pl.value = fmtExact(settings.arena.platHp);
+  $('#oRate').textContent = settings.chaos.rate.toFixed(2) + '×';
+  const q = $('#qSpeed'); let best = 0, bd = 9; [...q.options].forEach((o, i) => { const d = Math.abs(Math.log10(+o.value) - settings.tsExp); if (d < bd) { bd = d; best = i; } }); q.selectedIndex = best;
+  $('#bFmt').textContent = fmt(1234567890, settings.fmt);
+  $('#bSound').textContent = settings.sound.on ? '🔊' : '🔇';
+  $('#bPlay').textContent = paused ? '▶' : '⏸';
+}
+function applyUI() {
+  renderFormulas();
+  $$('[data-bind]').forEach(el => { const v = getPath(settings, el.dataset.bind); if (el.type === 'checkbox') el.checked = !!v; else el.value = v; });
+  updateOutputs();
+}
+function applyAll() {
+  FMT = settings.fmt; Sound.set(settings.sound.on, settings.sound.vol);
+  applyUI(); renderHpList(); renderSelects(); renderRoster(); fillEditor(); renderBracket(); renderLB(); renderPresets();
+}
+function onChanged(path) {
+  if (path === 'fmt') FMT = settings.fmt;
+  if (path === 'tsExp') settings.timeScale = Math.pow(10, settings.tsExp);
+  if (path.startsWith('sound.')) Sound.set(settings.sound.on, settings.sound.vol);
+  if (path === 'arena.layers' || path === 'arena.hpMode') renderHpList();
+  if (/^arena\.(shape|layers|platMul|hpMode|mulA|mulB|pace)$/.test(path)) startMatch({ ...match.opts, ready: match.state === 'ready', replay: false });
+  if (path === 'arena.size') arenas.forEach(a => { a.g = geom(a); collide(a.ball, a.g, () => {}); });
+  if (path === 'timeLimit') settings.timeLimit = Math.max(20, Math.min(900, settings.timeLimit));
+  if (path === 'seed' && match && match.state === 'ready') startMatch({ ready: true });
+  updateOutputs(); save();
+}
+
+function initUI() {
+  $$('[data-bind]').forEach(el => el.addEventListener(el.type === 'checkbox' || el.tagName === 'SELECT' ? 'change' : 'input', () => {
+    let v = el.type === 'checkbox' ? el.checked : (el.type === 'range' || el.type === 'number') ? parseFloat(el.value) : el.value;
+    if (typeof v === 'number' && !Number.isFinite(v)) return;
+    setPath(settings, el.dataset.bind, v); onChanged(el.dataset.bind);
+  }));
+  $$('.tabs button').forEach(b => { b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', b.classList.contains('on') ? 'true' : 'false'); });
+  $$('.tabs button').forEach(b => b.onclick = () => {
+    $$('.tabs button').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-selected', x === b ? 'true' : 'false'); });
+    $$('.pane').forEach(p => p.classList.toggle('on', p.id === 'p-' + b.dataset.tab));
+    if (b.dataset.tab === 'stats') { updateStats(); drawChart(); }
+  });
+  $('#selA').onchange = e => { settings.a = e.target.value; save(); startMatch({ ready: true }); };
+  $('#selB').onchange = e => { settings.b = e.target.value; save(); startMatch({ ready: true }); };
+  $('#bSwap').onclick = () => { [settings.a, settings.b] = [settings.b, settings.a]; renderSelects(); save(); startMatch({ ready: true }); };
+  $('#bRand').onclick = () => { const r = settings.roster; const i = Math.floor(Math.random() * r.length); let j; do { j = Math.floor(Math.random() * r.length); } while (j === i); settings.a = r[i].id; settings.b = r[j].id; renderSelects(); save(); startMatch({ ready: true }); };
+  $('#bSeed').onclick = () => { settings.seed = String(Math.floor(Math.random() * 90000) + 10000); applyUI(); save(); if (match.state === 'ready') startMatch({ ready: true }); };
+  $('#bFight').onclick = () => { Sound.init(); startMatch({}); $('#stage').scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+  $('#bPlay').onclick = togglePause;
+  $('#bRestart').onclick = () => { Sound.init(); if (match.state === 'ready') { match.state = 'cd'; updateOverlay(); } else restart(); };
+  $('#qSpeed').onchange = e => { settings.tsExp = Math.log10(+e.target.value); onChanged('tsExp'); applyUI(); };
+  $('#bFmt').onclick = () => { const m = ['short', 'commas', 'sci']; settings.fmt = m[(m.indexOf(settings.fmt) + 1) % 3]; FMT = settings.fmt; applyUI(); save(); };
+  $('#bSound').onclick = () => { settings.sound.on = !settings.sound.on; Sound.init(); Sound.set(settings.sound.on, settings.sound.vol); updateOutputs(); save(); };
+  $('#bRecQ').onclick = () => Rec.start();
+  $('#bTheme').onclick = () => setTheme(document.documentElement.dataset.theme === 'light' ? 'dark' : 'light');
+  $('#bTourStart').onclick = () => { Sound.init(); tourStart(); };
+  $('#bTourNext').onclick = () => { Sound.init(); tourNext(); };
+  $('#bLbReset').onclick = () => { LB = {}; store.set('bbs2.lb', LB); renderLB(); };
+  $('#bRecStart').onclick = () => Rec.start();
+  $('#bRecStop').onclick = () => Rec.stop();
+  $('#stopRec').onclick = () => Rec.stop();
+  $('#recClear').onclick = () => Rec.discard();
+  if (!Rec.supported) { $('#recWarn').hidden = false; ['#bRecStart', '#bRecStop', '#bRecQ'].forEach(q => { $(q).disabled = true; }); }
+  $('#pSave').onclick = () => { const n = $('#pName').value.trim(); if (!n) { toast('Name the preset first'); return; } const P = store.get('bbs2.presets', {}); P[n] = exportable(); store.set('bbs2.presets', P); renderPresets(); $('#pList').value = n; toast('Preset saved'); };
+  $('#pLoad').onclick = () => { const P = store.get('bbs2.presets', {}), n = $('#pList').value; if (P[n]) { applySettings(P[n]); toast('Preset loaded'); } };
+  $('#pDel').onclick = () => { const P = store.get('bbs2.presets', {}); delete P[$('#pList').value]; store.set('bbs2.presets', P); renderPresets(); };
+  $('#pExport').onclick = () => {
+    const json = JSON.stringify(exportable(), null, 2); $('#pJson').value = json;
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([json], { type: 'application/json' })); a.download = 'orbclash-preset.json';
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    if (navigator.clipboard) navigator.clipboard.writeText(json).catch(() => {});
+    toast('Exported');
+  };
+  $('#pImport').onclick = () => { try { applySettings(JSON.parse($('#pJson').value)); toast('Imported'); } catch (e) { toast('That is not valid preset JSON'); } };
+  $('#pReset').onclick = () => { if (confirm('Reset all settings, balls and presets in this browser?')) { applySettings(defaults()); store.set('bbs2.presets', {}); tour = null; store.set('bbs2.tour', null); LB = {}; store.set('bbs2.lb', LB); renderBracket(); renderLB(); renderPresets(); } };
+  $('#a-plat').addEventListener('input', e => {
+    const v = parseBig(e.target.value); if (!Number.isFinite(v) || v < 1) return;
+    settings.arena.platHp = Math.min(v, MAX_HP); if (settings.arena.hpMode === 'same') settings.arena.hps.fill(settings.arena.platHp); save(); startMatch({ ...match.opts, ready: match.state === 'ready', replay: false });
+  });
+  $$('#hpChips [data-fill]').forEach(b => b.onclick = () => fillHps(b.dataset.fill));
+  renderHpList();
+  bindEditor();
+  const flush = () => { clearTimeout(saveTimer); store.set('bbs2.settings', settings); };
+  window.addEventListener('pagehide', flush);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) flush(); });
+  if (window.ResizeObserver) new ResizeObserver(() => drawChart()).observe($('#chart'));
+  $('#cv').addEventListener('click', () => { if (match && match.state !== 'ready' && !match.over && !Rec.on) togglePause(); });
+  document.addEventListener('keydown', e => {
+    if (/input|textarea|select|button/i.test(e.target.tagName)) return;
+    if (e.code === 'Space') { e.preventDefault(); togglePause(); }
+    else if (e.key === 'r' || e.key === 'R') $('#bRestart').click();
+    else if (e.key === 'Escape' && Rec.on) Rec.stop();
+  });
+}
+function togglePause() { paused = !paused; updateOutputs(); }
+function setTheme(t) { document.documentElement.dataset.theme = t; PAL = PALS[t]; store.set('bbs.theme', t); drawChart(); }
+
+/* ==================================================================
+   10. HEADLESS RUNNER + QUICK MATCHUP TABLE
+================================================================== */
+let HEADLESS = false;
+function runHeadless(typeA, typeB, hp, seed) {
+  const sv = { arenas, match, rng, settings };
+  HEADLESS = true;
+  try {
+    settings = normalize(Object.assign({}, sv.settings, {
+      arena: Object.assign({}, sv.settings.arena, { platHp: hp, hpMode: 'same', layers: 3, mulA: 1, mulB: 1, shape: 'box', size: 1 }),
+      chaos: { meteors: false, boosts: false, shrink: false, rate: 1 }
+    }));
+    rng = mulberry32(hashStr(String(seed) + '|' + typeA + '|' + typeB));
+    const A = makeArena(0, makeFighter(typeA)), B = makeArena(1, makeFighter(typeB));
+    A.ball.foe = B.ball; B.ball.foe = A.ball;
+    arenas = [A, B];
+    match = { state: 'fight', cd: 0, t: 0, over: false, winner: null, loser: null, overT: 0, hist: [], histT: 0, confetti: [], opts: {}, tour: false, replay: true, reason: '' };
+    let guard = 0;
+    const MAX_STEPS = Math.ceil(settings.timeLimit / DT) + 10;
+    while (!match.over && guard++ < MAX_STEPS) step(DT);
+    return { dmgA: A.ball.st.dealt, dmgB: B.ball.st.dealt, hitsA: A.ball.hits, hitsB: B.ball.hits, time: match.t, winnerSide: match.winner ? match.winner.side : -1 };
+  } finally {
+    arenas = sv.arenas; match = sv.match; rng = sv.rng; settings = sv.settings; HEADLESS = false;
+  }
+}
+async function matrix(o) {
+  o = Object.assign({ seeds: 6, hp: 5000 }, o || {});
+  const keys = Object.keys(TYPES), W = {}, G = {};
+  keys.forEach(k => { W[k] = 0; G[k] = 0; });
+  for (let i = 0; i < keys.length; i++) for (let j = i + 1; j < keys.length; j++) {
+    for (let s = 0; s < o.seeds; s++) {
+      const a = keys[i], b = keys[j];
+      const r1 = runHeadless(a, b, o.hp, 'm' + s), r2 = runHeadless(b, a, o.hp, 'm' + s);
+      G[a] += 2; G[b] += 2;
+      if (r1.winnerSide === 0) W[a]++; else if (r1.winnerSide === 1) W[b]++;
+      if (r2.winnerSide === 0) W[b]++; else if (r2.winnerSide === 1) W[a]++;
+    }
+    await new Promise(r => setTimeout(r, 0));
+  }
+  const rows = keys.map(k => ({ type: k, winRate: +(W[k] / Math.max(1, G[k])).toFixed(3) })).sort((x, y) => y.winRate - x.winRate);
+  console.table(rows);
+  return rows;
+}
+window.__orbclash = {
+  runHeadless, matrix, TYPES,
+  get settings() { return settings; },
+  get arenas() { return arenas; },
+  get match() { return match; }
+};
+
+/* ==================================================================
+   11. MAIN LOOP
+================================================================== */
+const cv = $('#cv'), cx = cv.getContext('2d'); let mainScale = 1;
+function fit() {
+  const r = $('#stage').getBoundingClientRect(), dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+  cv.width = Math.max(2, Math.round(r.width * dpr)); cv.height = Math.max(2, Math.round(r.width * 16 / 9 * dpr)); mainScale = cv.width / W;
+}
+new ResizeObserver(fit).observe($('#stage'));
+
+let lastT = performance.now(), statT = 0, errCount = 0, autoPaused = false;
+function frame(now) {
+  requestAnimationFrame(frame);
+  try {
+    let el = (now - lastT) / 1000; lastT = now; if (!(el >= 0) || el > .1) el = .1;
+    if (!paused && match.state !== 'ready') {
+      acc += el * settings.timeScale; let n = 0;
+      while (acc >= DT && n < 120) { step(DT); acc -= DT; n++; }
+      if (n >= 120) acc = 0;
+    }
+    render(cx, mainScale);
+    if (Rec.on) { render(Rec.ctx, Rec.S); Rec.label(); if (Rec.stopAt && performance.now() > Rec.stopAt) Rec.stop(); }
+    statT += el;
+    if (statT > .25) { statT = 0; if ($('#p-stats').classList.contains('on') && !match.over) { updateStats(); drawChart(); } }
+    errCount = 0;
+  } catch (e) {
+    console.error(e);
+    if (++errCount === 5) { paused = true; updateOutputs(); toast('Something went wrong, so the battle was paused. Press restart to continue.'); }
+  }
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { if (!paused && !Rec.on) { paused = true; autoPaused = true; updateOutputs(); } }
+  else { lastT = performance.now(); if (autoPaused) { paused = false; autoPaused = false; updateOutputs(); } if (Rec.on) toast('Video frames are not captured while the tab is hidden'); }
+});
+window.addEventListener('error', () => {});
+window.addEventListener('unhandledrejection', e => { console.error(e.reason); });
+
+/* ==================================================================
+   12. BOOT
+================================================================== */
+(function boot() {
+  const th = store.get('bbs.theme', null) || (window.matchMedia && matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+  document.documentElement.dataset.theme = th; PAL = PALS[th];
+  initUI(); applyAll();
+  editId = settings.roster[0].id; renderRoster(); fillEditor();
+  startMatch({ ready: true });
+  fit(); requestAnimationFrame(frame);
+})();
+
+
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,62 @@
+{
+  "name": "Orbclash — Ball Battle Simulator",
+  "short_name": "Orbclash",
+  "description": "Free browser ball battle simulator with 15 math ball types and real physics.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#12101c",
+  "theme_color": "#12101c",
+  "categories": ["games", "entertainment", "simulation"],
+  "lang": "en-US",
+  "dir": "ltr",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' fill='%2312101c'/%3E%3Ccircle cx='96' cy='96' r='72' fill='%23ff4d8d'/%3E%3Ccircle cx='72' cy='72' r='20' fill='%23fff' fill-opacity='.5'/%3E%3C/svg%3E",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' fill='%2312101c'/%3E%3Ccircle cx='256' cy='256' r='192' fill='%23ff4d8d'/%3E%3Ccircle cx='192' cy='192' r='54' fill='%23fff' fill-opacity='.5'/%3E%3C/svg%3E",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' fill='%2312101c'/%3E%3Ccircle cx='256' cy='256' r='192' fill='%23ff4d8d'/%3E%3Ccircle cx='192' cy='192' r='54' fill='%23fff' fill-opacity='.5'/%3E%3C/svg%3E",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Start a battle",
+      "short_name": "Battle",
+      "description": "Jump straight into a random battle",
+      "url": "/?action=battle",
+      "icons": [
+        {
+          "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'%3E%3Crect width='96' height='96' fill='%2312101c'/%3E%3Ccircle cx='48' cy='48' r='36' fill='%23ffd23f'/%3E%3C/svg%3E",
+          "sizes": "96x96",
+          "type": "image/svg+xml"
+        }
+      ]
+    },
+    {
+      "name": "Record a video",
+      "short_name": "Record",
+      "description": "Record a fresh battle as vertical video",
+      "url": "/?action=record",
+      "icons": [
+        {
+          "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'%3E%3Crect width='96' height='96' fill='%2312101c'/%3E%3Ccircle cx='48' cy='48' r='36' fill='%23ff5470'/%3E%3C/svg%3E",
+          "sizes": "96x96",
+          "type": "image/svg+xml"
+        }
+      ]
+    }
+  ]
+}
