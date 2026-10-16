@@ -1,4 +1,4 @@
-User-agent: *
+﻿User-agent: *
 Allow: /
 
-Sitemap: https://orbclash.example.com/sitemap.xml
+Sitemap: https://oggamer0p69-lang.github.io/orbclash/sitemap.xml
